@@ -36,7 +36,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "cd" => {
                 let arg = args.next().unwrap();
                 env::set_current_dir(arg)
-                    .unwrap_or_else(|_| println!(" cd: {}: No such file or directory", arg));
+                    .unwrap_or_else(|_| println!("cd: {}: No such file or directory", arg));
             }
             "exit" => break,
             _ => match which(cmd) {
