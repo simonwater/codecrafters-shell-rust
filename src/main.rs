@@ -34,6 +34,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     _ => println!("{arg}: not found"),
                 }
             }
+            "pwd" => {
+                println!("{}", std::env::current_dir()?.display());
+            }
             "exit" => break,
             _ => match which(cmd) {
                 Ok(_) => {
