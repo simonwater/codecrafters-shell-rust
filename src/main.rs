@@ -8,10 +8,17 @@ fn main() {
 
         let mut input = String::with_capacity(32);
         io::stdin().read_line(&mut input).unwrap();
-        let cmd = input.trim();
+        let mut parts = input.trim().split_whitespace();
+        let cmd = parts.next().unwrap();
+        let args = parts;
+
         match cmd {
+            "echo" => {
+                let args = args.collect::<Vec<&str>>().join(" ");
+                eprintln!("{args}");
+            }
             "exit" => break,
-            _ => println!("{cmd}: command not found"),
+            _ => eprintln!("{cmd}: command not found"),
         }
     }
 }
