@@ -1,3 +1,4 @@
+use std::env;
 #[allow(unused_imports)]
 use std::io::{self, Write};
 use std::path::PathBuf;
@@ -22,10 +23,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut args = parts;
 
         match cmd {
-            "echo" => {
-                let args = args.collect::<Vec<&str>>().join(" ");
-                println!("{args}");
-            }
+            "echo" => println!("{}", args.collect::<Vec<&str>>().join(" ")),
             "type" => {
                 let arg = args.next().unwrap();
                 match my_which(arg) {
@@ -34,8 +32,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     _ => println!("{arg}: not found"),
                 }
             }
-            "pwd" => {
-                println!("{}", std::env::current_dir()?.display());
+            "pwd" => println!("{}", env::current_dir()?.display()),
+            "cd" => {
+                let arg = args.next().unwrap();
+                env::set_current_dir(arg)
+                    .unwrap_or_else(|_| println!(" cd: {}: No such file or directory", arg));
             }
             "exit" => break,
             _ => match which(cmd) {
@@ -68,7 +69,7 @@ fn my_which(cmd: &str) -> ProgramType {
 
 fn is_builtin(s: &str) -> bool {
     match s {
-        "echo" | "type" | "exit" | "pwd" => true,
+        "echo" | "type" | "exit" | "pwd" | "cd" => true,
         _ => false,
     }
 }
