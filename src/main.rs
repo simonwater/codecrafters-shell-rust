@@ -1,8 +1,16 @@
 #[allow(unused_imports)]
 use std::io::{self, Write};
+use std::path::PathBuf;
+use std::process::Command;
 use which::which;
 
-fn main() {
+pub enum ProgramType {
+    Builtin,
+    External(PathBuf),
+    Unknown,
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     loop {
         print!("$ ");
         io::stdout().flush().unwrap();
@@ -16,21 +24,42 @@ fn main() {
         match cmd {
             "echo" => {
                 let args = args.collect::<Vec<&str>>().join(" ");
-                eprintln!("{args}");
+                println!("{args}");
             }
             "type" => {
                 let arg = args.next().unwrap();
-                if is_builtin(arg) {
-                    eprintln!("{arg} is a shell builtin");
-                } else if let Ok(path) = which(arg) {
-                    eprintln!("{} is {}", arg, path.display());
-                } else {
-                    eprintln!("{arg}: not found");
+                match my_which(arg) {
+                    ProgramType::Builtin => println!("{arg} is a shell builtin"),
+                    ProgramType::External(path) => println!("{} is {}", arg, path.display()),
+                    _ => println!("{arg}: not found"),
                 }
             }
             "exit" => break,
-            _ => eprintln!("{cmd}: command not found"),
+            _ => match which(cmd) {
+                Ok(path) => {
+                    let output = Command::new(path).args(args).output()?;
+                    if output.status.success() {
+                        println!("{}", String::from_utf8(output.stdout)?);
+                    } else {
+                        let stderr = String::from_utf8_lossy(&output.stderr);
+                        eprintln!("execute fail! exit code: {:?}", output.status.code());
+                        eprintln!("error info:\n{}", stderr);
+                    }
+                }
+                Err(_) => println!("{cmd}: command not found"),
+            },
         }
+    }
+    Ok(())
+}
+
+fn my_which(cmd: &str) -> ProgramType {
+    if is_builtin(cmd) {
+        ProgramType::Builtin
+    } else if let Ok(path) = which(cmd) {
+        ProgramType::External(path)
+    } else {
+        ProgramType::Unknown
     }
 }
 
