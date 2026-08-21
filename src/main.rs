@@ -20,9 +20,9 @@ fn main() {
             "type" => {
                 let arg = args.next().unwrap();
                 if is_builtin(arg) {
-                    eprintln!("{cmd} is a shell builtin");
+                    eprintln!("{arg} is a shell builtin");
                 } else {
-                    eprintln!("{cmd}: not found");
+                    eprintln!("{arg}: not found");
                 }
             }
             "exit" => break,
