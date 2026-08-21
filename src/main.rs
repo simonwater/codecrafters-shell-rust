@@ -1,5 +1,6 @@
 #[allow(unused_imports)]
 use std::io::{self, Write};
+use which::which;
 
 fn main() {
     loop {
@@ -21,6 +22,8 @@ fn main() {
                 let arg = args.next().unwrap();
                 if is_builtin(arg) {
                     eprintln!("{arg} is a shell builtin");
+                } else if let Ok(path) = which(arg) {
+                    eprintln!("{} is {}", arg, path.display());
                 } else {
                     eprintln!("{arg}: not found");
                 }
