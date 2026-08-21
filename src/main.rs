@@ -39,7 +39,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Ok(_) => {
                     let output = Command::new(cmd).args(args).output()?;
                     if output.status.success() {
-                        println!("{}", String::from_utf8(output.stdout)?);
+                        print!("{}", String::from_utf8(output.stdout)?);
                     } else {
                         let stderr = String::from_utf8_lossy(&output.stderr);
                         eprintln!("execute fail! exit code: {:?}", output.status.code());
