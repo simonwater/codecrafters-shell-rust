@@ -14,18 +14,25 @@ pub enum ProgramType {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     loop {
         print!("$ ");
-        io::stdout().flush().unwrap();
+        io::stdout().flush()?;
 
         let mut input = String::with_capacity(32);
-        io::stdin().read_line(&mut input).unwrap();
-        let mut parts = input.trim().split_whitespace();
+        io::stdin().read_line(&mut input)?;
+        let input = input.trim();
+        if input.is_empty() {
+            continue;
+        }
+        let mut parts = input.split_whitespace();
         let cmd = parts.next().unwrap();
         let mut args = parts;
 
         match cmd {
             "echo" => println!("{}", args.collect::<Vec<&str>>().join(" ")),
             "type" => {
-                let arg = args.next().unwrap();
+                let arg = args.next().unwrap_or("");
+                if arg.is_empty() {
+                    continue;
+                }
                 match my_which(arg) {
                     ProgramType::Builtin => println!("{arg} is a shell builtin"),
                     ProgramType::External(path) => println!("{} is {}", arg, path.display()),
@@ -34,7 +41,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             "pwd" => println!("{}", env::current_dir()?.display()),
             "cd" => {
-                let arg = args.next().unwrap();
+                let arg = args.next().unwrap_or("");
+                if arg.is_empty() {
+                    continue;
+                }
                 let result = if arg == "~" {
                     let home = env::var("HOME")?;
                     env::set_current_dir(home)
