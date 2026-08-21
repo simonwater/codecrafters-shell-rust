@@ -9,6 +9,9 @@ fn main() {
         let mut input = String::with_capacity(32);
         io::stdin().read_line(&mut input).unwrap();
         let cmd = input.trim();
-        println!("{cmd}: command not found");
+        match cmd {
+            "exit" => break,
+            _ => println!("{cmd}: command not found"),
+        }
     }
 }
