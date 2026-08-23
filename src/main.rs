@@ -18,53 +18,32 @@ pub enum ProgramType {
 
 pub struct CommandResult {
     exit: bool,
-    out: Option<String>,
-    error: Option<String>,
+    out: String,
+    error: String,
 }
 
 impl CommandResult {
-    fn new(exit: bool, out: Option<String>, error: Option<String>) -> Self {
-        Self { exit, out, error }
-    }
-
-    fn proceed(out: Option<String>, error: Option<String>) -> Self {
+    pub fn new() -> Self {
         Self {
             exit: false,
-            out,
-            error,
+            out: String::new(),
+            error: String::new(),
         }
     }
 
-    fn exit() -> Self {
-        Self {
-            exit: true,
-            out: None,
-            error: None,
-        }
+    pub fn exit(mut self) -> Self {
+        self.exit = true;
+        self
     }
 
-    fn ok() -> Self {
-        Self {
-            exit: false,
-            out: None,
-            error: None,
-        }
+    pub fn success(mut self, out: String) -> Self {
+        self.out = out;
+        self
     }
 
-    fn success(out: String) -> Self {
-        Self {
-            exit: false,
-            out: Some(out),
-            error: None,
-        }
-    }
-
-    fn error(err: String) -> Self {
-        Self {
-            exit: false,
-            out: None,
-            error: Some(err),
-        }
+    pub fn error(mut self, err: String) -> Self {
+        self.error = err;
+        self
     }
 }
 
@@ -118,23 +97,19 @@ fn handle_output(cmd_res: &CommandResult, redirects: &[Redirection]) -> Result<(
         redirect.handle(cmd_res, &mut out_handled, &mut err_handled)?;
     }
 
-    if !out_handled {
-        if let Some(msg) = cmd_res.out.as_ref() {
-            print!("{msg}");
-        }
+    if !out_handled && !cmd_res.out.is_empty() {
+        print!("{}", cmd_res.out);
     }
 
-    if !err_handled {
-        if let Some(msg) = cmd_res.error.as_ref() {
-            print!("{msg}");
-        }
+    if !err_handled && !cmd_res.error.is_empty() {
+        print!("{}", cmd_res.error);
     }
     Ok(())
 }
 
 fn run_command(cmd: &str, args: &[&str]) -> Result<CommandResult> {
     let cmd_res = match cmd {
-        "echo" => CommandResult::success(format!("{}\n", args.join(" "))),
+        "echo" => CommandResult::new().success(format!("{}\n", args.join(" "))),
         "type" => {
             if let Some(arg) = args.first() {
                 let out = match my_which(arg) {
@@ -142,14 +117,14 @@ fn run_command(cmd: &str, args: &[&str]) -> Result<CommandResult> {
                     ProgramType::External(path) => format!("{} is {}\n", arg, path.display()),
                     _ => format!("{arg}: not found\n"),
                 };
-                CommandResult::success(out)
+                CommandResult::new().success(out)
             } else {
-                CommandResult::ok()
+                CommandResult::new()
             }
         }
-        "pwd" => CommandResult::success(format!("{}\n", env::current_dir()?.display())),
+        "pwd" => CommandResult::new().success(format!("{}\n", env::current_dir()?.display())),
         "cd" => {
-            let mut out: Option<String> = None;
+            let mut cmd_res = CommandResult::new();
             if let Some(&arg) = args.first() {
                 let result = if arg == "~" {
                     let home = env::var("HOME")?;
@@ -159,20 +134,20 @@ fn run_command(cmd: &str, args: &[&str]) -> Result<CommandResult> {
                 };
 
                 if let Err(_) = result {
-                    out = Some(format!("cd: {}: No such file or directory\n", arg));
+                    cmd_res = cmd_res.success(format!("cd: {}: No such file or directory\n", arg));
                 }
             }
-            CommandResult::proceed(out, None)
+            cmd_res
         }
-        "exit" => CommandResult::exit(),
+        "exit" => CommandResult::new().exit(),
         _ => match which(cmd) {
             Ok(_) => {
                 let output = Command::new(cmd).args(args).output()?;
-                let out = Some(String::from_utf8(output.stdout)?);
-                let err = Some(String::from_utf8(output.stderr)?);
-                CommandResult::proceed(out, err)
+                let out = String::from_utf8(output.stdout)?;
+                let err = String::from_utf8(output.stderr)?;
+                CommandResult::new().success(out).error(err)
             }
-            Err(_) => CommandResult::success(format!("{cmd}: command not found\n")),
+            Err(_) => CommandResult::new().success(format!("{cmd}: command not found\n")),
         },
     };
     Ok(cmd_res)

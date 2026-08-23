@@ -24,16 +24,16 @@ impl Redirection {
     ) -> Result<()> {
         match self.rtype {
             RedirectType::StdoutTruncate => {
-                if let Some(msg) = cmd_res.out.as_ref() {
+                if !cmd_res.out.is_empty() {
                     let mut f = File::create(&self.file_path)?;
-                    f.write_all(msg.as_bytes())?;
+                    f.write_all(cmd_res.out.as_bytes())?;
                     *out_handled = true;
                 }
             }
             RedirectType::StderrTruncate => {
-                if let Some(msg) = cmd_res.error.as_ref() {
-                    let mut f = File::create(&self.file_path)?;
-                    f.write_all(msg.as_bytes())?;
+                let mut f = File::create(&self.file_path)?;
+                if !cmd_res.error.is_empty() {
+                    f.write_all(cmd_res.error.as_bytes())?;
                     *err_handled = true;
                 }
             }
