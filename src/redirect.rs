@@ -3,7 +3,7 @@ use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
 
-use crate::RunState;
+use crate::CommandResult;
 
 pub enum RedirectType {
     StdoutTruncate, // > 或 1> (覆盖标准输出)
@@ -18,20 +18,20 @@ pub struct Redirection {
 impl Redirection {
     pub fn handle(
         &self,
-        state: &RunState,
+        cmd_res: &CommandResult,
         out_handled: &mut bool,
         err_handled: &mut bool,
     ) -> Result<()> {
         match self.rtype {
             RedirectType::StdoutTruncate => {
-                if let RunState::Out(msg) = state {
+                if let Some(msg) = cmd_res.out.as_ref() {
                     let mut f = File::create(&self.file_path)?;
                     f.write_all(msg.as_bytes())?;
                     *out_handled = true;
                 }
             }
             RedirectType::StderrTruncate => {
-                if let RunState::Error(msg) = state {
+                if let Some(msg) = cmd_res.error.as_ref() {
                     let mut f = File::create(&self.file_path)?;
                     f.write_all(msg.as_bytes())?;
                     *err_handled = true;

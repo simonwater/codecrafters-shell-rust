@@ -16,28 +16,55 @@ pub enum ProgramType {
     Unknown,
 }
 
-pub enum RunState {
-    Out(String),
-    Error(String),
-    None,
-}
-
 pub struct CommandResult {
     exit: bool,
-    state: RunState,
+    out: Option<String>,
+    error: Option<String>,
 }
 
 impl CommandResult {
-    fn new(exit: bool, state: RunState) -> Self {
-        Self { exit, state }
+    fn new(exit: bool, out: Option<String>, error: Option<String>) -> Self {
+        Self { exit, out, error }
     }
 
-    fn exit(state: RunState) -> Self {
-        Self::new(true, state)
+    fn proceed(out: Option<String>, error: Option<String>) -> Self {
+        Self {
+            exit: false,
+            out,
+            error,
+        }
     }
 
-    fn proceed(state: RunState) -> Self {
-        Self::new(false, state)
+    fn exit() -> Self {
+        Self {
+            exit: true,
+            out: None,
+            error: None,
+        }
+    }
+
+    fn ok() -> Self {
+        Self {
+            exit: false,
+            out: None,
+            error: None,
+        }
+    }
+
+    fn success(out: String) -> Self {
+        Self {
+            exit: false,
+            out: Some(out),
+            error: None,
+        }
+    }
+
+    fn error(err: String) -> Self {
+        Self {
+            exit: false,
+            out: None,
+            error: Some(err),
+        }
     }
 }
 
@@ -71,7 +98,7 @@ fn main() {
         match run_command(cmd, &args) {
             Err(e) => eprint!("{:#}", e),
             Ok(cmd_res) => {
-                if let Err(e) = handle_output(cmd_res.state, &redirects) {
+                if let Err(e) = handle_output(&cmd_res, &redirects) {
                     eprintln!("{:#}", e);
                 }
 
@@ -83,33 +110,31 @@ fn main() {
     }
 }
 
-fn handle_output(state: RunState, redirects: &[Redirection]) -> Result<()> {
+fn handle_output(cmd_res: &CommandResult, redirects: &[Redirection]) -> Result<()> {
     let mut out_handled = false;
     let mut err_handled = false;
 
     for redirect in redirects {
-        redirect.handle(&state, &mut out_handled, &mut err_handled)?;
+        redirect.handle(cmd_res, &mut out_handled, &mut err_handled)?;
     }
 
-    match state {
-        RunState::Out(msg) => {
-            if !out_handled {
-                print!("{msg}");
-            }
+    if !out_handled {
+        if let Some(msg) = cmd_res.out.as_ref() {
+            print!("{msg}");
         }
-        RunState::Error(msg) => {
-            if !err_handled {
-                eprint!("{msg}");
-            }
+    }
+
+    if !err_handled {
+        if let Some(msg) = cmd_res.error.as_ref() {
+            print!("{msg}");
         }
-        _ => {}
-    };
+    }
     Ok(())
 }
 
 fn run_command(cmd: &str, args: &[&str]) -> Result<CommandResult> {
     let cmd_res = match cmd {
-        "echo" => CommandResult::proceed(RunState::Out(format!("{}\n", args.join(" ")))),
+        "echo" => CommandResult::success(format!("{}\n", args.join(" "))),
         "type" => {
             if let Some(arg) = args.first() {
                 let out = match my_which(arg) {
@@ -117,17 +142,14 @@ fn run_command(cmd: &str, args: &[&str]) -> Result<CommandResult> {
                     ProgramType::External(path) => format!("{} is {}\n", arg, path.display()),
                     _ => format!("{arg}: not found\n"),
                 };
-                CommandResult::proceed(RunState::Out(out))
+                CommandResult::success(out)
             } else {
-                CommandResult::proceed(RunState::None)
+                CommandResult::ok()
             }
         }
-        "pwd" => CommandResult::proceed(RunState::Out(format!(
-            "{}\n",
-            env::current_dir()?.display()
-        ))),
+        "pwd" => CommandResult::success(format!("{}\n", env::current_dir()?.display())),
         "cd" => {
-            let mut state = RunState::None;
+            let mut out: Option<String> = None;
             if let Some(&arg) = args.first() {
                 let result = if arg == "~" {
                     let home = env::var("HOME")?;
@@ -137,24 +159,20 @@ fn run_command(cmd: &str, args: &[&str]) -> Result<CommandResult> {
                 };
 
                 if let Err(_) = result {
-                    state = RunState::Out(format!("cd: {}: No such file or directory\n", arg));
+                    out = Some(format!("cd: {}: No such file or directory\n", arg));
                 }
             }
-            CommandResult::proceed(state)
+            CommandResult::proceed(out, None)
         }
-        "exit" => CommandResult::exit(RunState::None),
+        "exit" => CommandResult::exit(),
         _ => match which(cmd) {
             Ok(_) => {
                 let output = Command::new(cmd).args(args).output()?;
-                if output.status.success() {
-                    CommandResult::proceed(RunState::Out(String::from_utf8(output.stdout)?))
-                } else {
-                    let stderr = String::from_utf8_lossy(&output.stderr);
-                    let msg = format!("{}", stderr);
-                    CommandResult::proceed(RunState::Error(msg))
-                }
+                let out = Some(String::from_utf8(output.stdout)?);
+                let err = Some(String::from_utf8(output.stderr)?);
+                CommandResult::proceed(out, err)
             }
-            Err(_) => CommandResult::proceed(RunState::Out(format!("{cmd}: command not found\n"))),
+            Err(_) => CommandResult::success(format!("{cmd}: command not found\n")),
         },
     };
     Ok(cmd_res)
