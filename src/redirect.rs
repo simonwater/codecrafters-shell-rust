@@ -7,7 +7,9 @@ use crate::CommandResult;
 
 pub enum RedirectType {
     StdoutTruncate, // > 或 1> (覆盖标准输出)
+    StdoutAppend,   // >> 或 1>> (追加标准输出)
     StderrTruncate, // 2> (覆盖标准错误)
+    StderrAppend,   // 2>> (追加标准错误)
 }
 
 pub struct Redirection {
@@ -24,14 +26,36 @@ impl Redirection {
     ) -> Result<()> {
         match self.rtype {
             RedirectType::StdoutTruncate => {
+                let mut f = File::create(&self.file_path)?;
                 if !cmd_res.out.is_empty() {
-                    let mut f = File::create(&self.file_path)?;
+                    f.write_all(cmd_res.out.as_bytes())?;
+                    *out_handled = true;
+                }
+            }
+            RedirectType::StdoutAppend => {
+                let mut f = File::options()
+                    .write(true)
+                    .create(true)
+                    .append(true)
+                    .open(&self.file_path)?;
+                if !cmd_res.out.is_empty() {
                     f.write_all(cmd_res.out.as_bytes())?;
                     *out_handled = true;
                 }
             }
             RedirectType::StderrTruncate => {
                 let mut f = File::create(&self.file_path)?;
+                if !cmd_res.error.is_empty() {
+                    f.write_all(cmd_res.error.as_bytes())?;
+                    *err_handled = true;
+                }
+            }
+            RedirectType::StderrAppend => {
+                let mut f = File::options()
+                    .write(true)
+                    .create(true)
+                    .append(true)
+                    .open(&self.file_path)?;
                 if !cmd_res.error.is_empty() {
                     f.write_all(cmd_res.error.as_bytes())?;
                     *err_handled = true;
@@ -49,7 +73,9 @@ pub fn parse_redirections(tokens: &[String]) -> Result<(Vec<&str>, Vec<Redirecti
     while let Some(token) = iter.next() {
         let rtype = match token.as_str() {
             ">" | "1>" => Some(RedirectType::StdoutTruncate),
+            ">>" | "1>>" => Some(RedirectType::StdoutAppend),
             "2>" => Some(RedirectType::StderrTruncate),
+            "2>>" => Some(RedirectType::StderrAppend),
             _ => None,
         };
 
