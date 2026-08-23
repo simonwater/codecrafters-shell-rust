@@ -150,11 +150,7 @@ fn run_command(cmd: &str, args: &[&str]) -> Result<CommandResult> {
                     CommandResult::proceed(RunState::Out(String::from_utf8(output.stdout)?))
                 } else {
                     let stderr = String::from_utf8_lossy(&output.stderr);
-                    let msg = format!(
-                        "execute fail! exit code: {:?}\nerror info:\n{}",
-                        output.status.code(),
-                        stderr
-                    );
+                    let msg = format!("{}", stderr);
                     CommandResult::proceed(RunState::Error(msg))
                 }
             }
