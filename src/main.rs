@@ -1,7 +1,4 @@
-pub mod auto_complete;
-pub mod command;
-pub mod redirect;
-
+use crate::redirect::Redirection;
 use anyhow::{Context, Result};
 use auto_complete::CompleterHelper;
 use command::CommandResult;
@@ -13,7 +10,10 @@ use std::path::PathBuf;
 use std::process::Command;
 use which::which;
 
-use crate::redirect::Redirection;
+pub mod auto_complete;
+pub mod command;
+pub mod executables;
+pub mod redirect;
 
 pub enum ProgramType {
     Builtin,
@@ -22,9 +22,12 @@ pub enum ProgramType {
 }
 
 fn main() {
+    let mut commands = executables::get_path_executables();
+    let builtins = vec!["echo".to_string(), "exit".to_string()];
+    commands.extend(builtins);
     let helper = CompleterHelper {
         file_completer: FilenameCompleter::new(),
-        commands: vec!["echo ".to_string(), "exit ".to_string()],
+        commands,
     };
     let mut rl = Editor::new().unwrap();
     rl.set_helper(Some(helper));
