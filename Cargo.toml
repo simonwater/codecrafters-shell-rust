@@ -11,3 +11,4 @@ bytes = "1.3.0"       # helps manage buffers
 thiserror = "1.0.38"  # error handling
 which = "6.0"
 shell-words = "1.1.1"
+rustyline = "18.0.1"

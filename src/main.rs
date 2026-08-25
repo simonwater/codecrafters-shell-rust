@@ -1,4 +1,11 @@
+pub mod auto_complete;
+pub mod command;
+pub mod redirect;
+
 use anyhow::{Context, Result};
+use auto_complete::CompleterHelper;
+use command::CommandResult;
+use rustyline::{Editor, completion::FilenameCompleter, error::ReadlineError};
 use std::env;
 #[allow(unused_imports)]
 use std::io::{self, Write};
@@ -8,51 +15,33 @@ use which::which;
 
 use crate::redirect::Redirection;
 
-pub mod redirect;
-
 pub enum ProgramType {
     Builtin,
     External(PathBuf),
     Unknown,
 }
 
-pub struct CommandResult {
-    exit: bool,
-    out: String,
-    error: String,
-}
-
-impl CommandResult {
-    pub fn new() -> Self {
-        Self {
-            exit: false,
-            out: String::new(),
-            error: String::new(),
-        }
-    }
-
-    pub fn exit(mut self) -> Self {
-        self.exit = true;
-        self
-    }
-
-    pub fn success(mut self, out: String) -> Self {
-        self.out = out;
-        self
-    }
-
-    pub fn error(mut self, err: String) -> Self {
-        self.error = err;
-        self
-    }
-}
-
 fn main() {
+    let helper = CompleterHelper {
+        file_completer: FilenameCompleter::new(),
+        commands: vec!["echo ".to_string(), "exit ".to_string()],
+    };
+    let mut rl = Editor::new().unwrap();
+    rl.set_helper(Some(helper));
+
     loop {
-        print!("$ ");
-        io::stdout().flush().unwrap();
-        let mut input = String::with_capacity(32);
-        io::stdin().read_line(&mut input).unwrap();
+        let input = match rl.readline("$ ") {
+            Ok(line) => line,
+            Err(ReadlineError::Interrupted) | Err(ReadlineError::Eof) => {
+                println!("Aborded!");
+                break;
+            }
+            Err(err) => {
+                println!("Error: {:?}", err);
+                break;
+            }
+        };
+        rl.add_history_entry(input.as_str()).unwrap();
 
         let parts = match shell_words::split(&input).context("command line parse error.") {
             Ok(parts) => parts,
