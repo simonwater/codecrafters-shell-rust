@@ -2,7 +2,8 @@ use crate::redirect::Redirection;
 use anyhow::{Context, Result};
 use auto_complete::CompleterHelper;
 use command::CommandResult;
-use rustyline::{Editor, completion::FilenameCompleter, error::ReadlineError};
+use rustyline::config::Configurer;
+use rustyline::{CompletionType, Editor, completion::FilenameCompleter, error::ReadlineError};
 use std::env;
 #[allow(unused_imports)]
 use std::io::{self, Write};
@@ -30,6 +31,7 @@ fn main() {
         commands,
     };
     let mut rl = Editor::new().unwrap();
+    rl.set_completion_type(CompletionType::List);
     rl.set_helper(Some(helper));
 
     loop {

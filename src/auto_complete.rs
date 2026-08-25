@@ -28,7 +28,7 @@ impl Completer for CompleterHelper {
         for cmd in &self.commands {
             if cmd.starts_with(input) {
                 candidates.push(Pair {
-                    display: format!("{} ", cmd),
+                    display: cmd.clone(),
                     replacement: format!("{} ", cmd),
                 });
             }
