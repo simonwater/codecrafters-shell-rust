@@ -1,3 +1,11 @@
+use std::path::PathBuf;
+
+pub enum CommandType {
+    Builtin,
+    External(PathBuf),
+    Unknown,
+}
+
 pub struct CommandResult {
     pub exit: bool,
     pub out: String,
