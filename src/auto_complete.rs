@@ -37,7 +37,14 @@ impl Completer for CompleterHelper {
         // 如果没有匹配到自定义命令，或者包含路径分隔符，尝试回退到文件路径补全
         if candidates.is_empty() || input.contains('/') || input.contains('\\') {
             if let Ok((start_pos, file_candidates)) = self.file_completer.complete(line, pos, ctx) {
-                return Ok((start_pos, file_candidates));
+                let canditates = file_candidates
+                    .into_iter()
+                    .map(|pair| Pair {
+                        display: pair.display,
+                        replacement: format!("{} ", pair.replacement),
+                    })
+                    .collect();
+                return Ok((start_pos, canditates));
             }
         }
 

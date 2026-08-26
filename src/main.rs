@@ -38,7 +38,7 @@ fn main() {
         let input = match rl.readline("$ ") {
             Ok(line) => line,
             Err(ReadlineError::Interrupted) | Err(ReadlineError::Eof) => {
-                println!("Aborded!");
+                println!("Aborted!");
                 break;
             }
             Err(err) => {
