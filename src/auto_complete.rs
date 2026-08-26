@@ -39,9 +39,11 @@ impl Completer for CompleterHelper {
             if let Ok((start_pos, file_candidates)) = self.file_completer.complete(line, pos, ctx) {
                 let canditates = file_candidates
                     .into_iter()
-                    .map(|pair| Pair {
-                        display: pair.display,
-                        replacement: format!("{} ", pair.replacement),
+                    .map(|mut pair| {
+                        if !pair.replacement.ends_with('/') && !pair.replacement.ends_with('\\') {
+                            pair.replacement.push(' ');
+                        }
+                        pair
                     })
                     .collect();
                 return Ok((start_pos, canditates));
