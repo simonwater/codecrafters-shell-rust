@@ -1,20 +1,26 @@
 use rustyline::completion::{Completer, FilenameCompleter, Pair};
 
+use rustyline::error::ReadlineError;
 use rustyline::highlight::{CmdKind, Highlighter};
 use rustyline::hint::Hinter;
 use rustyline::validate::Validator;
 use rustyline::{Context, Helper};
 use std::borrow::Cow;
+use std::io;
+use std::process::Command;
 
-pub struct CompleterHelper {
+use crate::Environment;
+
+pub struct CompleterHelper<'a> {
     // 内置的文件路径补全器
     pub file_completer: FilenameCompleter,
     // 自定义的关键字命令列表
     pub commands: Vec<String>,
+    pub env: &'a Environment,
 }
 
 /// 2. 为 Helper 实现 Completer 特质以支持 Tab 补全
-impl Completer for CompleterHelper {
+impl<'a> Completer for CompleterHelper<'a> {
     type Candidate = Pair;
 
     fn complete(
@@ -32,6 +38,12 @@ impl Completer for CompleterHelper {
                     replacement: format!("{} ", cmd),
                 });
             }
+        }
+
+        // 注册的脚本
+        let prog_res = self.programmable_complete(input)?;
+        if !prog_res.is_empty() {
+            candidates.extend(prog_res);
         }
 
         // 如果没有匹配到自定义命令，或者包含路径分隔符，尝试回退到文件路径补全
@@ -58,7 +70,33 @@ impl Completer for CompleterHelper {
     }
 }
 
-impl Hinter for CompleterHelper {
+impl<'a> CompleterHelper<'a> {
+    fn programmable_complete(&self, input: &str) -> rustyline::Result<Vec<Pair>> {
+        let mut ans = Vec::with_capacity(8);
+        if let Some((cmd, _arg)) = input.split_once(' ') {
+            if let Some(p) = self.env.get_complete_reg(cmd) {
+                let output = Command::new(p).output()?;
+                let out = String::from_utf8(output.stdout).map_err(|err| {
+                    ReadlineError::Io(io::Error::new(io::ErrorKind::InvalidData, err))
+                })?;
+                let _err = String::from_utf8(output.stderr).map_err(|err| {
+                    ReadlineError::Io(io::Error::new(io::ErrorKind::InvalidData, err))
+                })?;
+
+                if !out.is_empty() {
+                    ans.push(Pair {
+                        display: format!("{} {}", cmd, out.trim()),
+                        replacement: format!("{} {} ", cmd, out.trim()),
+                    })
+                }
+            }
+        }
+
+        Ok(ans)
+    }
+}
+
+impl<'a> Hinter for CompleterHelper<'a> {
     type Hint = String;
 
     fn hint(&self, _line: &str, _pos: usize, _ctx: &Context<'_>) -> Option<Self::Hint> {
@@ -66,7 +104,7 @@ impl Hinter for CompleterHelper {
     }
 }
 
-impl Highlighter for CompleterHelper {
+impl<'a> Highlighter for CompleterHelper<'a> {
     fn highlight<'l>(&self, line: &'l str, _pos: usize) -> Cow<'l, str> {
         Cow::Borrowed(line)
     }
@@ -76,6 +114,6 @@ impl Highlighter for CompleterHelper {
     }
 }
 
-impl Validator for CompleterHelper {}
+impl<'a> Validator for CompleterHelper<'a> {}
 
-impl Helper for CompleterHelper {}
+impl<'a> Helper for CompleterHelper<'a> {}

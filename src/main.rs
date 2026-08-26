@@ -14,14 +14,15 @@ fn main() {
     let mut commands = executables::get_path_executables();
     let builtins = vec!["echo".to_string(), "exit".to_string()];
     commands.extend(builtins);
+    let ctx = Environment::new();
     let helper = CompleterHelper {
         file_completer: FilenameCompleter::new(),
         commands,
+        env: &ctx,
     };
     let mut rl = Editor::new().unwrap();
     rl.set_completion_type(CompletionType::List);
     rl.set_helper(Some(helper));
-    let mut ctx = Environment::new();
 
     loop {
         // read
@@ -60,7 +61,7 @@ fn main() {
         };
 
         // execute
-        match run_command(cmd, &args, &mut ctx) {
+        match run_command(cmd, &args, &ctx) {
             Err(e) => eprint!("{:#}", e),
             Ok(cmd_res) => {
                 if let Err(e) = handle_output(&cmd_res, &redirects) {
@@ -75,7 +76,7 @@ fn main() {
     }
 }
 
-fn run_command(cmd: &str, args: &[&str], environment: &mut Environment) -> Result<CommandResult> {
+fn run_command(cmd: &str, args: &[&str], environment: &Environment) -> Result<CommandResult> {
     match cmd {
         "echo" => Ok(CommandResult::new().success(format!("{}\n", args.join(" ")))),
         "pwd" => Ok(CommandResult::new().success(format!("{}\n", env::current_dir()?.display()))),

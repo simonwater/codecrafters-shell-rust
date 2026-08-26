@@ -2,24 +2,24 @@ use crate::command::CommandResult;
 use crate::environment::Environment;
 use anyhow::Result;
 
-pub fn complete(args: &[&str], environment: &mut Environment) -> Result<CommandResult> {
-    if args.len() >= 2 {
-        match args[0] {
+pub fn complete(args: &[&str], environment: &Environment) -> Result<CommandResult> {
+    let mut iter = args.iter();
+    if let Some(&first) = iter.next() {
+        match first {
             "-p" => {
-                let cmd = args[1];
-                let res = if let Some(content) = environment.get_complete_reg(cmd) {
-                    let msg = format!("complete -C '{}' {}\n", content, cmd);
-                    CommandResult::new().success(msg)
-                } else {
-                    CommandResult::new()
-                        .error(format!("complete: {}: no completion specification\n", cmd))
-                };
-                return Ok(res);
+                if let Some(&cmd) = iter.next() {
+                    let res = if let Some(content) = environment.get_complete_reg(cmd) {
+                        let msg = format!("complete -C '{}' {}\n", content, cmd);
+                        CommandResult::new().success(msg)
+                    } else {
+                        CommandResult::new()
+                            .error(format!("complete: {}: no completion specification\n", cmd))
+                    };
+                    return Ok(res);
+                }
             }
             "-C" => {
-                if args.len() == 3 {
-                    let content = args[1];
-                    let cmd = args[2];
+                if let (Some(&content), Some(&cmd)) = (iter.next(), iter.next()) {
                     environment.reg_complete(cmd.to_string(), content.to_string());
                 }
             }
