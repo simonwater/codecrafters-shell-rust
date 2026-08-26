@@ -1,7 +1,7 @@
-use crate::redirect::Redirection;
 use anyhow::{Context, Result};
-use auto_complete::CompleterHelper;
-use command::CommandResult;
+use codecrafters_shell::{
+    CommandResult, CompleterHelper, Environment, Redirection, builtins, executables, redirect,
+};
 use rustyline::config::Configurer;
 use rustyline::{CompletionType, Editor, completion::FilenameCompleter, error::ReadlineError};
 use std::env;
@@ -9,12 +9,6 @@ use std::env;
 use std::io::{self, Write};
 use std::process::Command;
 use which::which;
-
-pub mod auto_complete;
-pub mod builtins;
-pub mod command;
-pub mod executables;
-pub mod redirect;
 
 fn main() {
     let mut commands = executables::get_path_executables();
@@ -27,6 +21,7 @@ fn main() {
     let mut rl = Editor::new().unwrap();
     rl.set_completion_type(CompletionType::List);
     rl.set_helper(Some(helper));
+    let mut ctx = Environment::new();
 
     loop {
         // read
@@ -65,7 +60,7 @@ fn main() {
         };
 
         // execute
-        match run_command(cmd, &args) {
+        match run_command(cmd, &args, &mut ctx) {
             Err(e) => eprint!("{:#}", e),
             Ok(cmd_res) => {
                 if let Err(e) = handle_output(&cmd_res, &redirects) {
@@ -80,12 +75,12 @@ fn main() {
     }
 }
 
-fn run_command(cmd: &str, args: &[&str]) -> Result<CommandResult> {
+fn run_command(cmd: &str, args: &[&str], environment: &mut Environment) -> Result<CommandResult> {
     match cmd {
         "echo" => Ok(CommandResult::new().success(format!("{}\n", args.join(" ")))),
         "pwd" => Ok(CommandResult::new().success(format!("{}\n", env::current_dir()?.display()))),
         "exit" => Ok(CommandResult::new().exit()),
-        "complete" => builtins::complete(args),
+        "complete" => builtins::complete(args, environment),
         "type" => builtins::my_type(args),
         "cd" => builtins::cd(args),
         _ => match which(cmd) {
