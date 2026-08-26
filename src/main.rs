@@ -159,7 +159,7 @@ fn my_which(cmd: &str) -> ProgramType {
 
 fn is_builtin(s: &str) -> bool {
     match s {
-        "echo" | "type" | "exit" | "pwd" | "cd" => true,
+        "echo" | "type" | "exit" | "pwd" | "cd" | "complete" => true,
         _ => false,
     }
 }

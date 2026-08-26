@@ -5,7 +5,6 @@ use rustyline::hint::Hinter;
 use rustyline::validate::Validator;
 use rustyline::{Context, Helper};
 use std::borrow::Cow;
-use std::env;
 
 pub struct CompleterHelper {
     // 内置的文件路径补全器
