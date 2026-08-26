@@ -1,5 +1,5 @@
+use anyhow::Result;
 use rustyline::completion::{Completer, FilenameCompleter, Pair};
-
 use rustyline::error::ReadlineError;
 use rustyline::highlight::{CmdKind, Highlighter};
 use rustyline::hint::Hinter;
@@ -41,9 +41,11 @@ impl<'a> Completer for CompleterHelper<'a> {
         }
 
         // 注册的脚本
-        let prog_res = self.programmable_complete(input)?;
-        if !prog_res.is_empty() {
-            candidates.extend(prog_res);
+        let (start_pos, prog_candidates) = self
+            .programmable_complete(input)
+            .map_err(|e| ReadlineError::Io(io::Error::other(e)))?;
+        if !prog_candidates.is_empty() {
+            return Ok((start_pos, prog_candidates));
         }
 
         // 如果没有匹配到自定义命令，或者包含路径分隔符，尝试回退到文件路径补全
@@ -71,28 +73,35 @@ impl<'a> Completer for CompleterHelper<'a> {
 }
 
 impl<'a> CompleterHelper<'a> {
-    fn programmable_complete(&self, input: &str) -> rustyline::Result<Vec<Pair>> {
-        let mut ans = Vec::with_capacity(8);
-        if let Some((cmd, _arg)) = input.split_once(' ') {
-            if let Some(p) = self.env.get_complete_reg(cmd) {
-                let output = Command::new(p).output()?;
-                let out = String::from_utf8(output.stdout).map_err(|err| {
-                    ReadlineError::Io(io::Error::new(io::ErrorKind::InvalidData, err))
-                })?;
-                let _err = String::from_utf8(output.stderr).map_err(|err| {
-                    ReadlineError::Io(io::Error::new(io::ErrorKind::InvalidData, err))
-                })?;
+    fn programmable_complete(&self, input: &str) -> Result<(usize, Vec<Pair>)> {
+        let empty = String::new();
+        let parts = shell_words::split(input).unwrap_or_else(|_| vec![input.to_string()]);
+        let mut iter = parts.iter();
+        let cmd = iter.next().unwrap_or(&empty);
+        if let Some(p) = self.env.get_complete_reg(cmd) {
+            let mut iter = iter.rev();
+            let (last, last_second) =
+                (iter.next().unwrap_or(&empty), iter.next().unwrap_or(&empty));
 
-                if !out.is_empty() {
-                    ans.push(Pair {
-                        display: format!("{} {}", cmd, out.trim()),
-                        replacement: format!("{} {} ", cmd, out.trim()),
+            let output = Command::new(p)
+                .args(vec![cmd, last, last_second])
+                .output()?;
+            let out = String::from_utf8(output.stdout)?;
+
+            if !out.is_empty() {
+                let candidates = out
+                    .lines()
+                    .filter(|&line| !line.is_empty())
+                    .map(|line| Pair {
+                        display: format!("{}", line.trim()),
+                        replacement: format!("{} ", line.trim()),
                     })
-                }
+                    .collect();
+                return Ok((input.len() - last.len(), candidates));
             }
         }
 
-        Ok(ans)
+        Ok((0, vec![]))
     }
 }
 
