@@ -87,14 +87,23 @@ fn run_command(cmd: &str, args: &[&str], environment: &Environment) -> Result<Co
         "cd" => builtins::cd(args),
         "jobs" => builtins::jobs(args),
         _ => match which(cmd) {
-            Ok(_) => {
-                let output = Command::new(cmd).args(args).output()?;
-                let out = String::from_utf8(output.stdout)?;
-                let err = String::from_utf8(output.stderr)?;
-                Ok(CommandResult::new().success(out).error(err))
-            }
+            Ok(_) => execute_proc(cmd, args),
             Err(_) => Ok(CommandResult::new().success(format!("{cmd}: command not found\n"))),
         },
+    }
+}
+
+fn execute_proc(cmd: &str, args: &[&str]) -> Result<CommandResult> {
+    if args.last().map(|&s| s) == Some("&") {
+        let child = Command::new(cmd).args(&args[..args.len() - 1]).spawn()?;
+        let pid = child.id();
+        let out = format!("[1] {}\n", pid);
+        Ok(CommandResult::new().success(out))
+    } else {
+        let output = Command::new(cmd).args(args).output()?;
+        let out = String::from_utf8(output.stdout)?;
+        let err = String::from_utf8(output.stderr)?;
+        Ok(CommandResult::new().success(out).error(err))
     }
 }
 
