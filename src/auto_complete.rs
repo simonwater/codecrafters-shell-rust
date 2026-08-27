@@ -80,23 +80,29 @@ impl<'a> CompleterHelper<'a> {
         let input = &line[..pos];
         let parts = shell_words::split(input).unwrap_or_else(|_| vec![input.to_string()]);
         let mut iter = parts.iter();
-        let cmd = iter.next().unwrap_or(&empty);
-        if let Some(p) = self.env.get_complete_reg(cmd) {
+        let cmd = &parts[0];
+        if parts.len() == 1 {
+            // 仅有命令自身时直接消耗掉，不让后面的last取得。
+            // 超过一个时，命令自身可能会被赋给last_second
+            iter.next();
+        }
+        if let Some(script_path) = self.env.get_complete_reg(cmd) {
             let mut iter = iter.rev();
             let (last, last_second) =
                 (iter.next().unwrap_or(&empty), iter.next().unwrap_or(&empty));
 
-            let output = Command::new(p)
+            let output = Command::new(&script_path)
                 .args(vec![cmd, last, last_second])
                 .env("COMP_LINE", line)
                 .env("COMP_POINT", pos.to_string())
                 .output()?;
             let out = String::from_utf8(output.stdout)?;
+            let _err = String::from_utf8(output.stderr)?;
 
             if !out.is_empty() {
                 let candidates = out
                     .lines()
-                    .filter(|&line| !line.is_empty())
+                    .filter(|&line| !line.is_empty() && line.starts_with(last))
                     .map(|line| Pair {
                         display: format!("{}", line.trim()),
                         replacement: format!("{} ", line.trim()),
@@ -131,3 +137,19 @@ impl<'a> Highlighter for CompleterHelper<'a> {
 impl<'a> Validator for CompleterHelper<'a> {}
 
 impl<'a> Helper for CompleterHelper<'a> {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn t() {
+        let output = Command::new("./test").output().unwrap();
+        let out = String::from_utf8(output.stdout).unwrap();
+        let err = String::from_utf8(output.stderr).unwrap();
+
+        for (i, line) in out.lines().enumerate() {
+            println!("out line{}: {}", i, line);
+        }
+        eprintln!("err: {}", err);
+    }
+}

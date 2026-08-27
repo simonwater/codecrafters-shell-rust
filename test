@@ -1,0 +1,9 @@
+#!/usr/bin/env python3
+
+print("clone")
+# print("add")
+# print("commit")
+# print("push")
+# print("pull")
+# print("checkout")
+# print("cherry-pick")

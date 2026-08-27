@@ -22,6 +22,7 @@ fn main() {
     };
     let mut rl = Editor::new().unwrap();
     rl.set_completion_type(CompletionType::List);
+    rl.set_bell_style(rustyline::config::BellStyle::Audible);
     rl.set_helper(Some(helper));
 
     loop {
