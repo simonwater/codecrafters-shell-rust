@@ -1,5 +1,5 @@
 use anyhow::Result;
-use rustyline::completion::{Completer, FilenameCompleter, Pair};
+use rustyline::completion::{Completer, FilenameCompleter, Pair, longest_common_prefix};
 use rustyline::error::ReadlineError;
 use rustyline::highlight::{CmdKind, Highlighter};
 use rustyline::hint::Hinter;
@@ -24,6 +24,28 @@ impl<'a> Completer for CompleterHelper<'a> {
     type Candidate = Pair;
 
     fn complete(
+        &self,
+        line: &str,
+        pos: usize,
+        ctx: &Context<'_>,
+    ) -> rustyline::Result<(usize, Vec<Pair>)> {
+        let (start_pos, canditates) = self.candidates(line, pos, ctx)?;
+        let prefix = &line[start_pos..pos];
+        if let Some(lcp) = longest_common_prefix(&canditates) {
+            if lcp.len() > prefix.len() {
+                let candidates = vec![Pair {
+                    display: lcp.to_string(),
+                    replacement: lcp.to_string(),
+                }];
+                return Ok((start_pos, candidates));
+            }
+        }
+        Ok((start_pos, canditates))
+    }
+}
+
+impl<'a> CompleterHelper<'a> {
+    fn candidates(
         &self,
         line: &str,
         pos: usize,
@@ -72,9 +94,7 @@ impl<'a> Completer for CompleterHelper<'a> {
 
         Ok((0, candidates))
     }
-}
 
-impl<'a> CompleterHelper<'a> {
     fn programmable_complete(&self, line: &str, pos: usize) -> Result<(usize, Vec<Pair>)> {
         let empty = String::new();
         let input = &line[..pos];
@@ -82,8 +102,8 @@ impl<'a> CompleterHelper<'a> {
         let mut iter = parts.iter();
         let cmd = &parts[0];
         if parts.len() == 1 {
-            // 仅有命令自身时直接消耗掉，不让后面的last取得。
-            // 超过一个时，命令自身可能会被赋给last_second
+            // 仅有命令自身一个词时直接消耗掉，不让后面的last取到
+            // 超过一个词时，命令自身可能会被赋给last_second，需要保留
             iter.next();
         }
         if let Some(script_path) = self.env.get_complete_reg(cmd) {
