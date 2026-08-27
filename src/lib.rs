@@ -3,6 +3,7 @@ pub mod builtins;
 pub mod command;
 pub mod environment;
 pub mod executables;
+pub mod jobs;
 pub mod redirect;
 
 pub use auto_complete::CompleterHelper;

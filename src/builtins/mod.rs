@@ -1,6 +1,7 @@
 pub mod complete;
 
 use crate::command::{CommandResult, CommandType};
+use crate::jobs::JOBMANAGER;
 use anyhow::Result;
 pub use complete::complete;
 use std::env;
@@ -53,6 +54,7 @@ pub fn my_type(args: &[&str]) -> Result<CommandResult> {
     }
 }
 
-pub fn jobs(args: &[&str]) -> Result<CommandResult> {
-    Ok(CommandResult::new())
+pub fn jobs(_args: &[&str]) -> Result<CommandResult> {
+    let out = JOBMANAGER.lock().unwrap().all_running_jobs();
+    Ok(CommandResult::new().success(out))
 }
