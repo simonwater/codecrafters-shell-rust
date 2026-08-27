@@ -85,6 +85,7 @@ fn run_command(cmd: &str, args: &[&str], environment: &Environment) -> Result<Co
         "complete" => builtins::complete(args, environment),
         "type" => builtins::my_type(args),
         "cd" => builtins::cd(args),
+        "jobs" => builtins::jobs(args),
         _ => match which(cmd) {
             Ok(_) => {
                 let output = Command::new(cmd).args(args).output()?;

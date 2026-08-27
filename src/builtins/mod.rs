@@ -8,7 +8,7 @@ use which::which;
 
 fn is_builtin(s: &str) -> bool {
     match s {
-        "echo" | "type" | "exit" | "pwd" | "cd" | "complete" => true,
+        "echo" | "type" | "exit" | "pwd" | "cd" | "complete" | "jobs" => true,
         _ => false,
     }
 }
@@ -51,4 +51,8 @@ pub fn my_type(args: &[&str]) -> Result<CommandResult> {
     } else {
         Ok(CommandResult::new())
     }
+}
+
+pub fn jobs(args: &[&str]) -> Result<CommandResult> {
+    Ok(CommandResult::new())
 }
