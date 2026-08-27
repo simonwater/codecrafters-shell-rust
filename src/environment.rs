@@ -15,6 +15,10 @@ impl Environment {
         self.complete_regs.borrow_mut().insert(cmd, content);
     }
 
+    pub fn remove_complete_reg(&self, cmd: &str) {
+        self.complete_regs.borrow_mut().remove(cmd);
+    }
+
     pub fn get_complete_reg(&self, cmd: &str) -> Option<String> {
         self.complete_regs.borrow().get(cmd).cloned()
     }

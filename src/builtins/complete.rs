@@ -18,6 +18,11 @@ pub fn complete(args: &[&str], environment: &Environment) -> Result<CommandResul
                     return Ok(res);
                 }
             }
+            "-r" => {
+                if let Some(&cmd) = iter.next() {
+                    environment.remove_complete_reg(cmd);
+                }
+            }
             "-C" => {
                 if let (Some(&content), Some(&cmd)) = (iter.next(), iter.next()) {
                     environment.reg_complete(cmd.to_string(), content.to_string());
