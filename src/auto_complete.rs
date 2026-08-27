@@ -41,11 +41,13 @@ impl<'a> Completer for CompleterHelper<'a> {
         }
 
         // 注册的脚本
-        let (start_pos, prog_candidates) = self
-            .programmable_complete(input)
-            .map_err(|e| ReadlineError::Io(io::Error::other(e)))?;
-        if !prog_candidates.is_empty() {
-            return Ok((start_pos, prog_candidates));
+        if candidates.is_empty() {
+            let (start_pos, prog_candidates) = self
+                .programmable_complete(line, pos)
+                .map_err(|e| ReadlineError::Io(io::Error::other(e)))?;
+            if !prog_candidates.is_empty() {
+                return Ok((start_pos, prog_candidates));
+            }
         }
 
         // 如果没有匹配到自定义命令，或者包含路径分隔符，尝试回退到文件路径补全
@@ -73,8 +75,9 @@ impl<'a> Completer for CompleterHelper<'a> {
 }
 
 impl<'a> CompleterHelper<'a> {
-    fn programmable_complete(&self, input: &str) -> Result<(usize, Vec<Pair>)> {
+    fn programmable_complete(&self, line: &str, pos: usize) -> Result<(usize, Vec<Pair>)> {
         let empty = String::new();
+        let input = &line[..pos];
         let parts = shell_words::split(input).unwrap_or_else(|_| vec![input.to_string()]);
         let mut iter = parts.iter();
         let cmd = iter.next().unwrap_or(&empty);
@@ -85,6 +88,8 @@ impl<'a> CompleterHelper<'a> {
 
             let output = Command::new(p)
                 .args(vec![cmd, last, last_second])
+                .env("COMP_LINE", line)
+                .env("COMP_POINT", pos.to_string())
                 .output()?;
             let out = String::from_utf8(output.stdout)?;
 
