@@ -16,7 +16,6 @@ pub enum JobState {
 
 pub struct Job {
     child: Child,
-    state: JobState,
     cmd: String,
 }
 struct Node {
@@ -122,15 +121,11 @@ impl JobManager {
     }
 
     pub fn add_child(&mut self, child: Child, cmd: String) -> usize {
-        let job = Job {
-            child,
-            state: JobState::Running,
-            cmd,
-        };
+        let job = Job { child, cmd };
         self.job_table.add_job(job)
     }
 
-    pub fn list_jobs(&mut self) -> Result<String> {
+    pub fn list_jobs(&mut self, done_mode: bool) -> Result<String> {
         let mut ans = String::with_capacity(128);
         if self.job_table.len == 0 {
             return Ok(ans);
@@ -145,6 +140,10 @@ impl JobManager {
                 let marker = Self::job_marker(node.index, first, second);
                 let line = match Self::refresh_job(job)? {
                     JobState::Running => {
+                        if done_mode {
+                            continue;
+                        }
+
                         format!(
                             "[{}]{}  {:<24}{} &\n",
                             node.index, marker, "Running", job.cmd

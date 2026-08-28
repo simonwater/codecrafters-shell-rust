@@ -55,6 +55,6 @@ pub fn my_type(args: &[&str]) -> Result<CommandResult> {
 }
 
 pub fn jobs(_args: &[&str]) -> Result<CommandResult> {
-    let out = JOB_MANAGER.lock().unwrap().list_jobs()?;
+    let out = JOB_MANAGER.lock().unwrap().list_jobs(false)?;
     Ok(CommandResult::new().success(out))
 }

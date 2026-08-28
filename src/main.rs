@@ -26,6 +26,7 @@ fn main() {
     rl.set_helper(Some(helper));
 
     loop {
+        check_jobs();
         // read
         let input = match rl.readline("$ ") {
             Ok(line) => line,
@@ -74,6 +75,13 @@ fn main() {
                 }
             }
         }
+    }
+}
+
+fn check_jobs() {
+    match jobs::JOB_MANAGER.lock().unwrap().list_jobs(true) {
+        Ok(out) => print!("{}", out),
+        Err(e) => eprintln!("{:?}", e),
     }
 }
 
