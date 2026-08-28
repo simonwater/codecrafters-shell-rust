@@ -1,6 +1,8 @@
 use anyhow::Result;
 
 use std::{
+    cmp::Reverse,
+    collections::BinaryHeap,
     process::Child,
     sync::{LazyLock, Mutex},
 };
@@ -15,66 +17,149 @@ pub enum JobState {
 }
 
 pub struct Job {
-    number: u32,
     child: Child,
-    state: JobState,
+    _state: JobState,
     cmd: String,
+}
+struct Node {
+    job: Option<Job>,
+    index: usize,
+    prev: usize,
+    next: usize,
+}
+
+impl Node {
+    fn new(job: Option<Job>, index: usize) -> Self {
+        Self {
+            job,
+            index,
+            prev: 0,
+            next: 0,
+        }
+    }
+}
+
+struct JobTable {
+    nodes: Vec<Node>,
+    len: usize,
+    candidates: BinaryHeap<Reverse<usize>>,
+}
+
+impl JobTable {
+    fn with_capacity(cap: usize) -> Self {
+        let cap = cap.max(64);
+        let mut nodes = Vec::with_capacity(cap);
+        let dummy = Node::new(None, 0);
+        nodes.push(dummy);
+        Self {
+            nodes,
+            len: 0,
+            candidates: BinaryHeap::with_capacity(cap),
+        }
+    }
+
+    fn add_job(&mut self, job: Job) -> usize {
+        let number = if let Some(Reverse(num)) = self.candidates.pop() {
+            self.nodes[num].job = Some(job);
+            num
+        } else {
+            let num = self.nodes.len();
+            let node = Node::new(Some(job), num);
+            self.nodes.push(node);
+            num
+        };
+
+        self.add_node(number);
+
+        number
+    }
+
+    fn get_first_second(&self) -> (usize, usize) {
+        let first = self.nodes[0].next;
+        let second = self.nodes[first].next;
+        (first, second)
+    }
+
+    fn add_node(&mut self, new_index: usize) {
+        let next_index = self.nodes[0].next;
+        // 新节点前驱指向虚拟节点
+        self.nodes[new_index].prev = 0;
+        // 新节点后继执行旧的头节点
+        self.nodes[new_index].next = next_index;
+
+        // 旧的头节点前驱指向新节点
+        self.nodes[next_index].prev = new_index;
+        // 虚拟节点的后继指向新节点
+        self.nodes[0].next = new_index;
+
+        self.len += 1;
+    }
+
+    fn delete_node(&mut self, node_index: usize) {
+        let prev_index = self.nodes[node_index].prev;
+        let next_index = self.nodes[node_index].next;
+
+        self.nodes[prev_index].next = next_index;
+        self.nodes[next_index].prev = prev_index;
+        self.nodes[node_index].job = None;
+
+        self.candidates.push(Reverse(node_index)); // 回收删除的节点索引
+
+        self.len -= 1;
+    }
 }
 
 pub struct JobManager {
-    jobs: Vec<Option<Job>>,
-    next_num: u32,
-    most_recent: u32,
-    second_recent: u32,
+    job_table: JobTable,
 }
 
 impl JobManager {
     fn new() -> Self {
         Self {
-            jobs: Vec::with_capacity(32),
-            next_num: 1,
-            most_recent: 0,
-            second_recent: 0,
+            job_table: JobTable::with_capacity(128),
         }
     }
 
-    pub fn add_job(&mut self, child: Child, cmd: String) -> u32 {
+    pub fn add_child(&mut self, child: Child, cmd: String) -> usize {
         let job = Job {
-            number: self.next_num,
             child,
             state: JobState::Running,
             cmd,
         };
-        self.jobs.push(Some(job));
-        (self.most_recent, self.second_recent) = (self.next_num, self.most_recent);
-        self.next_num += 1;
-
-        self.most_recent
+        self.job_table.add_job(job)
     }
 
     pub fn list_jobs(&mut self) -> Result<String> {
         let mut ans = String::with_capacity(128);
-        for item in self.jobs.iter_mut() {
-            let mut is_done = false;
-            if let Some(job) = item {
-                let marker = Self::job_marker(job, self.most_recent, self.second_recent);
+        if self.job_table.len == 0 {
+            return Ok(ans);
+        }
+
+        let (first, second) = self.job_table.get_first_second();
+        let mut iter = self.job_table.nodes.iter_mut();
+        iter.next(); // 跳过虚拟节点
+        let mut delete_nums = Vec::with_capacity(self.job_table.len);
+        for node in iter {
+            if let Some(job) = node.job.as_mut() {
+                let marker = Self::job_marker(node.index, first, second);
                 let line = match Self::refresh_job(job)? {
                     JobState::Running => {
                         format!(
                             "[{}]{}  {:<24}{} &\n",
-                            job.number, marker, "Running", job.cmd
+                            node.index, marker, "Running", job.cmd
                         )
                     }
                     JobState::Done(_) => {
-                        is_done = true;
-                        format!("[{}]{}  {:<24}{}\n", job.number, marker, "Done", job.cmd)
+                        delete_nums.push(node.index);
+                        format!("[{}]{}  {:<24}{}\n", node.index, marker, "Done", job.cmd)
                     }
                 };
                 ans.push_str(&line);
             }
-            if is_done {
-                item.take();
-            }
+        }
+
+        for num in delete_nums {
+            self.job_table.delete_node(num);
         }
         Ok(ans)
     }
@@ -93,10 +178,10 @@ impl JobManager {
         }
     }
 
-    fn job_marker(job: &Job, most_recent: u32, second_recent: u32) -> char {
-        if job.number == most_recent {
+    fn job_marker(number: usize, most_recent: usize, second_recent: usize) -> char {
+        if number == most_recent {
             '+'
-        } else if job.number == second_recent {
+        } else if number == second_recent {
             '-'
         } else {
             ' '
