@@ -97,8 +97,8 @@ fn execute_proc(cmd: &str, args: &[&str]) -> Result<CommandResult> {
     if args.last().map(|&s| s) == Some("&") {
         let child = Command::new(cmd).args(&args[..args.len() - 1]).spawn()?;
         let pid = child.id();
-        let job_cmd = format!("{} {}", cmd, args.join(" "));
-        let num = jobs::JOBMANAGER.lock().unwrap().add_job(child, job_cmd);
+        let job_cmd = format!("{} {}", cmd, args[..args.len() - 1].join(" "));
+        let num = jobs::JOB_MANAGER.lock().unwrap().add_job(child, job_cmd);
         let out = format!("[{}] {}\n", num, pid);
         Ok(CommandResult::new().success(out))
     } else {
