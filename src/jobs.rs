@@ -1,8 +1,6 @@
 use anyhow::Result;
 
 use std::{
-    cmp::Reverse,
-    collections::BinaryHeap,
     process::Child,
     sync::{LazyLock, Mutex},
 };
@@ -18,7 +16,7 @@ pub enum JobState {
 
 pub struct Job {
     child: Child,
-    _state: JobState,
+    state: JobState,
     cmd: String,
 }
 struct Node {
@@ -39,10 +37,10 @@ impl Node {
     }
 }
 
+/// 双向循环链表，任意任务中途执行完成删除以后都可以通过头节点很方便的取到最近和第二近运行任务
 struct JobTable {
     nodes: Vec<Node>,
     len: usize,
-    candidates: BinaryHeap<Reverse<usize>>,
 }
 
 impl JobTable {
@@ -51,15 +49,11 @@ impl JobTable {
         let mut nodes = Vec::with_capacity(cap);
         let dummy = Node::new(None, 0);
         nodes.push(dummy);
-        Self {
-            nodes,
-            len: 0,
-            candidates: BinaryHeap::with_capacity(cap),
-        }
+        Self { nodes, len: 0 }
     }
 
     fn add_job(&mut self, job: Job) -> usize {
-        let number = if let Some(Reverse(num)) = self.candidates.pop() {
+        let number = if let Some(num) = self.get_free_node() {
             self.nodes[num].job = Some(job);
             num
         } else {
@@ -72,6 +66,15 @@ impl JobTable {
         self.add_node(number);
 
         number
+    }
+
+    fn get_free_node(&self) -> Option<usize> {
+        for node in self.nodes.iter().skip(1) {
+            if node.job.is_none() {
+                return Some(node.index);
+            }
+        }
+        None
     }
 
     fn get_first_second(&self) -> (usize, usize) {
@@ -102,8 +105,6 @@ impl JobTable {
         self.nodes[prev_index].next = next_index;
         self.nodes[next_index].prev = prev_index;
         self.nodes[node_index].job = None;
-
-        self.candidates.push(Reverse(node_index)); // 回收删除的节点索引
 
         self.len -= 1;
     }
