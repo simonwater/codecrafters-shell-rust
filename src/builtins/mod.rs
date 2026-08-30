@@ -1,13 +1,27 @@
 pub mod complete;
 
 use crate::command::{CommandResult, CommandType};
+use crate::environment::Environment;
 use crate::jobs::JOB_MANAGER;
 use anyhow::Result;
 pub use complete::complete;
 use std::env;
 use which::which;
 
-fn is_builtin(s: &str) -> bool {
+pub fn run_builtin(cmd: &str, args: &[&str], environment: &Environment) -> Result<CommandResult> {
+    match cmd {
+        "echo" => Ok(CommandResult::new().success(format!("{}\n", args.join(" ")))),
+        "pwd" => Ok(CommandResult::new().success(format!("{}\n", env::current_dir()?.display()))),
+        "exit" => Ok(CommandResult::new().exit()),
+        "complete" => complete(args, environment),
+        "type" => my_type(args),
+        "cd" => cd(args),
+        "jobs" => jobs(args),
+        _ => Ok(CommandResult::new().success(format!("{cmd}: command not found\n"))),
+    }
+}
+
+pub fn is_builtin(s: &str) -> bool {
     match s {
         "echo" | "type" | "exit" | "pwd" | "cd" | "complete" | "jobs" => true,
         _ => false,

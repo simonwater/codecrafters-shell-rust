@@ -164,10 +164,6 @@ impl JobManager {
         Ok(ans)
     }
 
-    pub fn refresh_job_table(&mut self) -> Result<()> {
-        Ok(())
-    }
-
     fn refresh_job(job: &mut Job) -> Result<JobState> {
         match job.child.try_wait()? {
             Some(status) => {
