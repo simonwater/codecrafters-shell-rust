@@ -1,8 +1,8 @@
-use crate::command::CommandResult;
+use crate::command::ShellOutput;
 use crate::environment::Environment;
 use anyhow::Result;
 
-pub fn complete(args: &[&str], environment: &Environment) -> Result<CommandResult> {
+pub fn complete(args: &[&str], environment: &Environment) -> Result<ShellOutput> {
     let mut iter = args.iter();
     if let Some(&first) = iter.next() {
         match first {
@@ -10,9 +10,9 @@ pub fn complete(args: &[&str], environment: &Environment) -> Result<CommandResul
                 if let Some(&cmd) = iter.next() {
                     let res = if let Some(content) = environment.get_complete_reg(cmd) {
                         let msg = format!("complete -C '{}' {}\n", content, cmd);
-                        CommandResult::new().success(msg)
+                        ShellOutput::new().success(msg)
                     } else {
-                        CommandResult::new()
+                        ShellOutput::new()
                             .error(format!("complete: {}: no completion specification\n", cmd))
                     };
                     return Ok(res);
@@ -31,5 +31,5 @@ pub fn complete(args: &[&str], environment: &Environment) -> Result<CommandResul
             _ => {}
         }
     }
-    Ok(CommandResult::new())
+    Ok(ShellOutput::null())
 }

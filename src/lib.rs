@@ -7,6 +7,6 @@ pub mod jobs;
 pub mod redirect;
 
 pub use auto_complete::CompleterHelper;
-pub use command::{CommandResult, ShellCommand};
+pub use command::{ShellCommand, ShellOutput};
 pub use environment::Environment;
 pub use redirect::Redirection;

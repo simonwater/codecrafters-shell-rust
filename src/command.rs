@@ -8,18 +8,26 @@ pub enum CommandType {
     Unknown,
 }
 
-pub struct CommandResult {
+pub struct ShellOutput {
     pub exit: bool,
     pub out: String,
-    pub error: String,
+    pub err: String,
 }
 
-impl CommandResult {
+impl ShellOutput {
     pub fn new() -> Self {
         Self {
             exit: false,
             out: String::new(),
-            error: String::new(),
+            err: String::new(),
+        }
+    }
+
+    pub fn null() -> Self {
+        Self {
+            exit: false,
+            out: String::new(),
+            err: String::new(),
         }
     }
 
@@ -34,7 +42,7 @@ impl CommandResult {
     }
 
     pub fn error(mut self, err: String) -> Self {
-        self.error = err;
+        self.err = err;
         self
     }
 }

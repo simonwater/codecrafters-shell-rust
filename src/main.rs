@@ -1,7 +1,8 @@
 use anyhow::{Context, Result};
 use codecrafters_shell::{
-    CommandResult, CompleterHelper, Environment, ShellCommand, builtins, executables, jobs,
+    CompleterHelper, Environment, ShellCommand, ShellOutput, builtins, executables, jobs,
 };
+use os_pipe::{PipeReader, PipeWriter, pipe};
 use rustyline::config::Configurer;
 use rustyline::{CompletionType, Editor, completion::FilenameCompleter, error::ReadlineError};
 use std::process::{Child, Command, Stdio};
@@ -60,11 +61,12 @@ fn main() {
         let commands = tokens
             .split(|token| token == "|")
             .collect::<Vec<&[String]>>();
-        let mut prev_out: Option<Stdio> = None;
+        // mut prev_out: Option<Stdio> = None;
+        let mut prev_reader: Option<PipeReader> = None;
         let mut children: Vec<Child> = Vec::with_capacity(commands.len());
         for (i, &cmd_tokens) in commands.iter().enumerate() {
             // parse command
-            let cmd = match ShellCommand::parse(cmd_tokens) {
+            let mut cmd = match ShellCommand::parse(cmd_tokens) {
                 Ok(cmd) => cmd,
                 Err(e) => {
                     eprintln!("{:#}", e);
@@ -73,21 +75,31 @@ fn main() {
             };
 
             // execute
-            let is_first = i == 0;
+            let _is_first = i == 0;
             let is_last = i == commands.len() - 1;
-            let result = if builtins::is_builtin(cmd.name) {
-                builtins::run_builtin(cmd.name, &cmd.args, &ctx)
+            let (cur_reader, mut cur_writer) = if commands.len() > 0 && !is_last {
+                let (r, w) = pipe().unwrap();
+                (Some(r), Some(w))
             } else {
-                run_external(&mut prev_out, &cmd, is_first, is_last, &mut children)
+                (None, None)
             };
 
+            let result = if builtins::is_builtin(cmd.name) {
+                builtins::run_builtin(&mut None, &mut cmd, &ctx)
+            } else {
+                let res = run_external(&mut prev_reader, &mut cur_writer, &cmd, &mut children);
+                prev_reader = cur_reader;
+                res
+            };
+
+            // handle shelloutput
             match result {
-                Ok(cmd_res) => {
-                    if let Err(e) = handle_output(&cmd_res, &cmd, is_last) {
+                Ok(mut output) => {
+                    if let Err(e) = handle_main_output(&mut output, &mut cmd) {
                         eprintln!("{:#}", e);
                     }
 
-                    if cmd_res.exit {
+                    if output.exit {
                         return;
                     }
                 }
@@ -114,27 +126,24 @@ fn check_jobs() {
 }
 
 fn run_external(
-    prev_stdout: &mut Option<Stdio>,
+    prev_reader: &mut Option<PipeReader>,
+    cur_writer: &mut Option<PipeWriter>,
     shell_cmd: &ShellCommand,
-    is_first: bool,
-    is_last: bool,
     children: &mut Vec<Child>,
-) -> Result<CommandResult> {
+) -> Result<ShellOutput> {
     match which(shell_cmd.name) {
         Ok(_) => {
             let mut command = Command::new(shell_cmd.name);
             command.args(&shell_cmd.args);
 
-            // 输入
-            if is_first {
-                command.stdin(Stdio::inherit());
-            } else if let Some(prev) = prev_stdout.take() {
-                command.stdin(prev);
+            // 输入配置
+            if let Some(prev) = prev_reader.take() {
+                command.stdin(Stdio::from(prev));
             } else {
-                command.stdin(Stdio::piped());
+                command.stdin(Stdio::inherit());
             }
 
-            // 错误
+            // 错误配置
             if !shell_cmd.err_redirects.is_empty() {
                 for r in &shell_cmd.err_redirects {
                     let file = r.redirect_file()?;
@@ -144,31 +153,26 @@ fn run_external(
                 command.stderr(Stdio::inherit());
             }
 
-            // 输出
+            // 输出配置
             if !shell_cmd.out_redirects.is_empty() {
                 // 重定向优先级高于管道
                 for r in &shell_cmd.out_redirects {
                     let file = r.redirect_file()?;
                     command.stdout(Stdio::from(file));
                 }
-            } else if is_last {
-                command.stdout(Stdio::inherit());
+            } else if let Some(writer) = cur_writer.take() {
+                command.stdout(Stdio::from(writer));
             } else {
-                command.stdout(Stdio::piped());
+                command.stdout(Stdio::inherit());
             }
 
-            let mut child = command.spawn()?;
-            if !is_last {
-                if let Some(stdout) = child.stdout.take() {
-                    *prev_stdout = Some(Stdio::from(stdout));
-                }
-            }
+            let child = command.spawn()?;
             children.push(child);
 
-            Ok(CommandResult::new())
+            Ok(ShellOutput::null())
         }
         Err(_) => {
-            Ok(CommandResult::new().success(format!("{}: command not found\n", shell_cmd.name)))
+            Ok(ShellOutput::new().success(format!("{}: command not found\n", shell_cmd.name)))
         }
     }
 }
@@ -188,23 +192,28 @@ fn run_job(cmd: &str, args: &[&str]) -> Result<()> {
     Ok(())
 }
 
-fn handle_output(cmd_res: &CommandResult, cmd: &ShellCommand, is_last: bool) -> Result<()> {
-    // handle out
-    if !cmd.out_redirects.is_empty() {
-        for r in &cmd.out_redirects {
-            r.handle(cmd_res)?;
+/// shell主进程的output
+fn handle_main_output(output: &mut ShellOutput, shell_cmd: &mut ShellCommand) -> Result<()> {
+    // 错误
+    if !shell_cmd.err_redirects.is_empty() {
+        for r in &shell_cmd.err_redirects {
+            r.handle_err(&output)?;
         }
-    } else if is_last && !cmd_res.out.is_empty() {
-        print!("{}", cmd_res.out);
+        shell_cmd.err_redirects.clear();
+    } else if !output.err.is_empty() {
+        eprint!("{}", output.err);
     }
+    output.err.clear(); // 处理完
 
-    // handle error
-    if !cmd.err_redirects.is_empty() {
-        for r in &cmd.err_redirects {
-            r.handle(cmd_res)?;
+    // 输出
+    if !shell_cmd.out_redirects.is_empty() {
+        for r in &shell_cmd.out_redirects {
+            r.handle_out(&output)?;
         }
-    } else if !cmd_res.error.is_empty() {
-        print!("{}", cmd_res.error);
+        shell_cmd.out_redirects.clear();
+    } else if !output.out.is_empty() {
+        print!("{}", output.out);
     }
+    output.out.clear(); // 处理完
     Ok(())
 }

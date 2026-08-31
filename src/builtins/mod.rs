@@ -1,24 +1,54 @@
 pub mod complete;
 
-use crate::command::{CommandResult, CommandType};
+use crate::command::{CommandType, ShellCommand, ShellOutput};
 use crate::environment::Environment;
 use crate::jobs::JOB_MANAGER;
 use anyhow::Result;
 pub use complete::complete;
 use std::env;
+use std::process::Stdio;
 use which::which;
 
-pub fn run_builtin(cmd: &str, args: &[&str], environment: &Environment) -> Result<CommandResult> {
-    match cmd {
-        "echo" => Ok(CommandResult::new().success(format!("{}\n", args.join(" ")))),
-        "pwd" => Ok(CommandResult::new().success(format!("{}\n", env::current_dir()?.display()))),
-        "exit" => Ok(CommandResult::new().exit()),
-        "complete" => complete(args, environment),
+pub fn run_builtin(
+    _prev_stdout: &mut Option<Stdio>,
+    shell_cmd: &mut ShellCommand,
+    environment: &Environment,
+) -> Result<ShellOutput> {
+    let args = &shell_cmd.args;
+    let mut output = match shell_cmd.name {
+        "echo" => ShellOutput::new().success(format!("{}\n", args.join(" "))),
+        "pwd" => ShellOutput::new().success(format!("{}\n", env::current_dir()?.display())),
+        "exit" => ShellOutput::new().exit(),
+        "complete" => complete(args, environment)?,
         "type" => my_type(args),
-        "cd" => cd(args),
-        "jobs" => jobs(args),
-        _ => Ok(CommandResult::new().success(format!("{cmd}: command not found\n"))),
+        "cd" => cd(args)?,
+        "jobs" => jobs(args)?,
+        _ => ShellOutput::new().success(format!("{}: command not found\n", shell_cmd.name)),
+    };
+
+    // 错误
+    if !shell_cmd.err_redirects.is_empty() {
+        for r in &shell_cmd.err_redirects {
+            r.handle_err(&output)?;
+        }
+        shell_cmd.err_redirects.clear();
+    } else if !output.err.is_empty() {
+        eprint!("{}", output.err);
     }
+    output.err.clear(); // 处理完
+
+    // 输出
+    if !shell_cmd.out_redirects.is_empty() {
+        for r in &shell_cmd.out_redirects {
+            r.handle_out(&output)?;
+        }
+        shell_cmd.out_redirects.clear();
+    } else if !output.out.is_empty() {
+        print!("{}", output.out);
+    }
+    output.out.clear(); // 处理完
+
+    Ok(output)
 }
 
 pub fn is_builtin(s: &str) -> bool {
@@ -38,8 +68,8 @@ fn my_which(cmd: &str) -> CommandType {
     }
 }
 
-pub fn cd(args: &[&str]) -> Result<CommandResult> {
-    let mut cmd_res = CommandResult::new();
+pub fn cd(args: &[&str]) -> Result<ShellOutput> {
+    let mut cmd_res = ShellOutput::new();
     if let Some(&arg) = args.first() {
         let result = if arg == "~" {
             let home = env::var("HOME")?;
@@ -55,20 +85,20 @@ pub fn cd(args: &[&str]) -> Result<CommandResult> {
     Ok(cmd_res)
 }
 
-pub fn my_type(args: &[&str]) -> Result<CommandResult> {
+pub fn my_type(args: &[&str]) -> ShellOutput {
     if let Some(arg) = args.first() {
         let out = match my_which(arg) {
             CommandType::Builtin => format!("{arg} is a shell builtin\n"),
             CommandType::External(path) => format!("{} is {}\n", arg, path.display()),
             _ => format!("{arg}: not found\n"),
         };
-        Ok(CommandResult::new().success(out))
+        ShellOutput::new().success(out)
     } else {
-        Ok(CommandResult::new())
+        ShellOutput::null()
     }
 }
 
-pub fn jobs(_args: &[&str]) -> Result<CommandResult> {
+pub fn jobs(_args: &[&str]) -> Result<ShellOutput> {
     let out = JOB_MANAGER.lock().unwrap().list_jobs(false)?;
-    Ok(CommandResult::new().success(out))
+    Ok(ShellOutput::new().success(out))
 }
