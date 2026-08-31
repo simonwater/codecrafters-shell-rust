@@ -5,6 +5,10 @@ use std::path::PathBuf;
 
 use crate::CommandResult;
 
+type OutRedirects = Vec<Redirection>;
+type ErrRedirects = Vec<Redirection>;
+
+#[derive(Clone, Copy)]
 pub enum RedirectType {
     StdoutTruncate, // > 或 1> (覆盖标准输出)
     StdoutAppend,   // >> 或 1>> (追加标准输出)
@@ -18,47 +22,32 @@ pub struct Redirection {
 }
 
 impl Redirection {
-    pub fn handle(
-        &self,
-        cmd_res: &CommandResult,
-        out_handled: &mut bool,
-        err_handled: &mut bool,
-    ) -> Result<()> {
+    pub fn redirect_file(&self) -> Result<File> {
+        let file = match self.rtype {
+            RedirectType::StdoutTruncate | RedirectType::StderrTruncate => {
+                File::create(&self.file_path)?
+            }
+            RedirectType::StdoutAppend | RedirectType::StderrAppend => File::options()
+                .write(true)
+                .create(true)
+                .append(true)
+                .open(&self.file_path)?,
+        };
+        Ok(file)
+    }
+
+    pub fn handle(&self, cmd_res: &CommandResult) -> Result<()> {
         match self.rtype {
-            RedirectType::StdoutTruncate => {
-                let mut f = File::create(&self.file_path)?;
+            RedirectType::StdoutTruncate | RedirectType::StdoutAppend => {
+                let mut f = self.redirect_file()?;
                 if !cmd_res.out.is_empty() {
                     f.write_all(cmd_res.out.as_bytes())?;
-                    *out_handled = true;
                 }
             }
-            RedirectType::StdoutAppend => {
-                let mut f = File::options()
-                    .write(true)
-                    .create(true)
-                    .append(true)
-                    .open(&self.file_path)?;
-                if !cmd_res.out.is_empty() {
-                    f.write_all(cmd_res.out.as_bytes())?;
-                    *out_handled = true;
-                }
-            }
-            RedirectType::StderrTruncate => {
-                let mut f = File::create(&self.file_path)?;
+            RedirectType::StderrTruncate | RedirectType::StderrAppend => {
+                let mut f = self.redirect_file()?;
                 if !cmd_res.error.is_empty() {
                     f.write_all(cmd_res.error.as_bytes())?;
-                    *err_handled = true;
-                }
-            }
-            RedirectType::StderrAppend => {
-                let mut f = File::options()
-                    .write(true)
-                    .create(true)
-                    .append(true)
-                    .open(&self.file_path)?;
-                if !cmd_res.error.is_empty() {
-                    f.write_all(cmd_res.error.as_bytes())?;
-                    *err_handled = true;
                 }
             }
         }
@@ -66,8 +55,9 @@ impl Redirection {
     }
 }
 
-pub fn parse_redirections(tokens: &[String]) -> Result<(Vec<&str>, Vec<Redirection>)> {
-    let mut redirects = Vec::new();
+pub fn parse_redirections(tokens: &[String]) -> Result<(Vec<&str>, OutRedirects, ErrRedirects)> {
+    let mut out_redirects = Vec::new();
+    let mut err_redirects = Vec::new();
     let mut args: Vec<&str> = Vec::with_capacity(tokens.len());
     let mut iter = tokens.iter();
     while let Some(token) = iter.next() {
@@ -81,11 +71,18 @@ pub fn parse_redirections(tokens: &[String]) -> Result<(Vec<&str>, Vec<Redirecti
 
         if let Some(t) = rtype {
             if let Some(file) = iter.next() {
-                let redirection = Redirection {
+                let redirect = Redirection {
                     rtype: t,
                     file_path: PathBuf::from(file),
                 };
-                redirects.push(redirection);
+                match t {
+                    RedirectType::StdoutAppend | RedirectType::StdoutTruncate => {
+                        out_redirects.push(redirect)
+                    }
+                    RedirectType::StderrAppend | RedirectType::StderrTruncate => {
+                        err_redirects.push(redirect)
+                    }
+                };
             } else {
                 bail!("parse error: miss redirect file name!");
             }
@@ -94,5 +91,5 @@ pub fn parse_redirections(tokens: &[String]) -> Result<(Vec<&str>, Vec<Redirecti
         }
     }
 
-    Ok((args, redirects))
+    Ok((args, out_redirects, err_redirects))
 }
