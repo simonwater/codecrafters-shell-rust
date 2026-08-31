@@ -5,20 +5,22 @@ use crate::environment::Environment;
 use crate::jobs::JOB_MANAGER;
 use anyhow::Result;
 pub use complete::complete;
+use os_pipe::{PipeReader, PipeWriter};
 use std::env;
-use std::process::Stdio;
+use std::io::Write;
 use which::which;
 
 pub fn run_builtin(
-    _prev_stdout: &mut Option<Stdio>,
-    shell_cmd: &mut ShellCommand,
+    prev_reader: &mut Option<PipeReader>,
+    cur_writer: &mut Option<PipeWriter>,
+    shell_cmd: &ShellCommand,
     environment: &Environment,
 ) -> Result<ShellOutput> {
     let args = &shell_cmd.args;
-    let mut output = match shell_cmd.name {
+    let output = match shell_cmd.name {
         "echo" => ShellOutput::new().success(format!("{}\n", args.join(" "))),
         "pwd" => ShellOutput::new().success(format!("{}\n", env::current_dir()?.display())),
-        "exit" => ShellOutput::new().exit(),
+        "exit" => ShellOutput::new().exit(true),
         "complete" => complete(args, environment)?,
         "type" => my_type(args),
         "cd" => cd(args)?,
@@ -31,24 +33,22 @@ pub fn run_builtin(
         for r in &shell_cmd.err_redirects {
             r.handle_err(&output)?;
         }
-        shell_cmd.err_redirects.clear();
     } else if !output.err.is_empty() {
         eprint!("{}", output.err);
     }
-    output.err.clear(); // 处理完
 
     // 输出
     if !shell_cmd.out_redirects.is_empty() {
         for r in &shell_cmd.out_redirects {
             r.handle_out(&output)?;
         }
-        shell_cmd.out_redirects.clear();
+    } else if let Some(mut writer) = cur_writer.take() {
+        write!(writer, "{}", output.out)?;
     } else if !output.out.is_empty() {
         print!("{}", output.out);
     }
-    output.out.clear(); // 处理完
 
-    Ok(output)
+    Ok(ShellOutput::new().exit(output.exit))
 }
 
 pub fn is_builtin(s: &str) -> bool {

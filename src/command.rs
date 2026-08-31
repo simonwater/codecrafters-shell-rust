@@ -31,8 +31,8 @@ impl ShellOutput {
         }
     }
 
-    pub fn exit(mut self) -> Self {
-        self.exit = true;
+    pub fn exit(mut self, val: bool) -> Self {
+        self.exit = val;
         self
     }
 

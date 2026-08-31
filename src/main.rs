@@ -85,20 +85,15 @@ fn main() {
             };
 
             let result = if builtins::is_builtin(cmd.name) {
-                builtins::run_builtin(&mut None, &mut cmd, &ctx)
+                builtins::run_builtin(&mut prev_reader, &mut cur_writer, &mut cmd, &ctx)
             } else {
-                let res = run_external(&mut prev_reader, &mut cur_writer, &cmd, &mut children);
-                prev_reader = cur_reader;
-                res
+                run_external(&mut prev_reader, &mut cur_writer, &cmd, &mut children)
             };
+            prev_reader = cur_reader;
 
-            // handle shelloutput
+            // handle error and continue or exit
             match result {
-                Ok(mut output) => {
-                    if let Err(e) = handle_main_output(&mut output, &mut cmd) {
-                        eprintln!("{:#}", e);
-                    }
-
+                Ok(output) => {
                     if output.exit {
                         return;
                     }
@@ -168,13 +163,15 @@ fn run_external(
 
             let child = command.spawn()?;
             children.push(child);
-
-            Ok(ShellOutput::null())
         }
         Err(_) => {
-            Ok(ShellOutput::new().success(format!("{}: command not found\n", shell_cmd.name)))
+            let output =
+                ShellOutput::new().error(format!("{}: command not found\n", shell_cmd.name));
+            handle_main_error(&output, shell_cmd)?;
         }
     }
+
+    Ok(ShellOutput::null())
 }
 
 fn run_job(cmd: &str, args: &[&str]) -> Result<()> {
@@ -193,27 +190,14 @@ fn run_job(cmd: &str, args: &[&str]) -> Result<()> {
 }
 
 /// shell主进程的output
-fn handle_main_output(output: &mut ShellOutput, shell_cmd: &mut ShellCommand) -> Result<()> {
+fn handle_main_error(output: &ShellOutput, shell_cmd: &ShellCommand) -> Result<()> {
     // 错误
     if !shell_cmd.err_redirects.is_empty() {
         for r in &shell_cmd.err_redirects {
             r.handle_err(&output)?;
         }
-        shell_cmd.err_redirects.clear();
     } else if !output.err.is_empty() {
         eprint!("{}", output.err);
     }
-    output.err.clear(); // 处理完
-
-    // 输出
-    if !shell_cmd.out_redirects.is_empty() {
-        for r in &shell_cmd.out_redirects {
-            r.handle_out(&output)?;
-        }
-        shell_cmd.out_redirects.clear();
-    } else if !output.out.is_empty() {
-        print!("{}", output.out);
-    }
-    output.out.clear(); // 处理完
     Ok(())
 }
