@@ -1,25 +1,24 @@
-use std::{cell::RefCell, collections::HashMap};
+use crate::CompleterHelper;
+use rustyline::{Editor, history::FileHistory};
+use std::cell::RefCell;
+use std::rc::Rc;
+
+type RcEditor = Rc<RefCell<Editor<CompleterHelper, FileHistory>>>;
 
 pub struct Environment {
-    complete_regs: RefCell<HashMap<String, String>>,
+    editor: RcEditor,
 }
 
 impl Environment {
-    pub fn new() -> Self {
-        Environment {
-            complete_regs: RefCell::new(HashMap::with_capacity(32)),
-        }
+    pub fn new(editor: RcEditor) -> Self {
+        Environment { editor }
     }
 
-    pub fn reg_complete(&self, cmd: String, content: String) {
-        self.complete_regs.borrow_mut().insert(cmd, content);
+    pub fn get_editor_ref(&self) -> &RcEditor {
+        &self.editor
     }
 
-    pub fn remove_complete_reg(&self, cmd: &str) {
-        self.complete_regs.borrow_mut().remove(cmd);
-    }
-
-    pub fn get_complete_reg(&self, cmd: &str) -> Option<String> {
-        self.complete_regs.borrow().get(cmd).cloned()
+    pub fn get_editor_mut(&mut self) -> &mut RcEditor {
+        &mut self.editor
     }
 }

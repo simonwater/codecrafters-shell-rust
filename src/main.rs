@@ -5,24 +5,26 @@ use codecrafters_shell::{
 use os_pipe::{PipeReader, PipeWriter, pipe};
 use rustyline::config::Configurer;
 use rustyline::{CompletionType, Editor, completion::FilenameCompleter, error::ReadlineError};
+use std::cell::RefCell;
 use std::io::{self, IsTerminal, Write};
 use std::process::{Child, Command, Stdio};
+use std::rc::Rc;
 use which::which;
 
 fn main() {
     let mut commands = executables::get_path_executables();
     let builtins = vec!["echo".to_string(), "exit".to_string()];
     commands.extend(builtins);
-    let ctx = Environment::new();
     let helper = CompleterHelper {
         file_completer: FilenameCompleter::new(),
         commands,
-        env: &ctx,
     };
-    let mut rl = Editor::new().unwrap();
+    let mut rl: Editor<CompleterHelper, rustyline::history::FileHistory> = Editor::new().unwrap();
     rl.set_completion_type(CompletionType::List);
     rl.set_bell_style(rustyline::config::BellStyle::Audible);
     rl.set_helper(Some(helper));
+    let rl = Rc::new(RefCell::new(rl));
+    let ctx = Environment::new(rl.clone());
 
     loop {
         std::io::stdout().flush().unwrap();
@@ -34,7 +36,7 @@ fn main() {
             print!("$ ");
             io::stdout().flush().unwrap();
         }
-        let input = match rl.readline("$ ") {
+        let input = match rl.borrow_mut().readline("$ ") {
             Ok(line) => line,
             Err(ReadlineError::Interrupted) | Err(ReadlineError::Eof) => {
                 println!("Aborted!");
@@ -45,7 +47,7 @@ fn main() {
                 break;
             }
         };
-        rl.add_history_entry(input.as_str()).unwrap();
+        rl.borrow_mut().add_history_entry(input.as_str()).unwrap();
 
         // parse tokens
         let tokens = match shell_words::split(&input).context("command line parse error.") {

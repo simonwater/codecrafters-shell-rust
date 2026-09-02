@@ -9,18 +9,17 @@ use std::borrow::Cow;
 use std::io;
 use std::process::Command;
 
-use crate::Environment;
+use crate::COMPS_MANAGER;
 
-pub struct CompleterHelper<'a> {
+pub struct CompleterHelper {
     // 内置的文件路径补全器
     pub file_completer: FilenameCompleter,
     // 自定义的关键字命令列表
     pub commands: Vec<String>,
-    pub env: &'a Environment,
 }
 
 /// 2. 为 Helper 实现 Completer 特质以支持 Tab 补全
-impl<'a> Completer for CompleterHelper<'a> {
+impl Completer for CompleterHelper {
     type Candidate = Pair;
 
     fn complete(
@@ -44,7 +43,7 @@ impl<'a> Completer for CompleterHelper<'a> {
     }
 }
 
-impl<'a> CompleterHelper<'a> {
+impl CompleterHelper {
     fn candidates(
         &self,
         line: &str,
@@ -106,7 +105,7 @@ impl<'a> CompleterHelper<'a> {
             // 超过一个词时，命令自身可能会被赋给last_second，需要保留
             iter.next();
         }
-        if let Some(script_path) = self.env.get_complete_reg(cmd) {
+        if let Some(script_path) = COMPS_MANAGER.lock().unwrap().get_complete_reg(cmd) {
             let mut iter = iter.rev();
             let (last, last_second) =
                 (iter.next().unwrap_or(&empty), iter.next().unwrap_or(&empty));
@@ -136,7 +135,7 @@ impl<'a> CompleterHelper<'a> {
     }
 }
 
-impl<'a> Hinter for CompleterHelper<'a> {
+impl Hinter for CompleterHelper {
     type Hint = String;
 
     fn hint(&self, _line: &str, _pos: usize, _ctx: &Context<'_>) -> Option<Self::Hint> {
@@ -144,7 +143,7 @@ impl<'a> Hinter for CompleterHelper<'a> {
     }
 }
 
-impl<'a> Highlighter for CompleterHelper<'a> {
+impl Highlighter for CompleterHelper {
     fn highlight<'l>(&self, line: &'l str, _pos: usize) -> Cow<'l, str> {
         Cow::Borrowed(line)
     }
@@ -154,9 +153,9 @@ impl<'a> Highlighter for CompleterHelper<'a> {
     }
 }
 
-impl<'a> Validator for CompleterHelper<'a> {}
+impl Validator for CompleterHelper {}
 
-impl<'a> Helper for CompleterHelper<'a> {}
+impl Helper for CompleterHelper {}
 
 #[cfg(test)]
 mod tests {
