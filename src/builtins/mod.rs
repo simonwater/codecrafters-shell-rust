@@ -11,7 +11,7 @@ use std::io::Write;
 use which::which;
 
 pub fn run_builtin(
-    prev_reader: &mut Option<PipeReader>,
+    _prev_reader: &mut Option<PipeReader>,
     cur_writer: &mut Option<PipeWriter>,
     shell_cmd: &ShellCommand,
     environment: &Environment,
@@ -19,8 +19,8 @@ pub fn run_builtin(
     let args = &shell_cmd.args;
     let output = match shell_cmd.name {
         "echo" => ShellOutput::new().success(format!("{}\n", args.join(" "))),
-        "pwd" => ShellOutput::new().success(format!("{}\n", env::current_dir()?.display())),
         "exit" => ShellOutput::new().exit(true),
+        "pwd" => pwd()?,
         "complete" => complete(args, environment)?,
         "type" => my_type(args),
         "cd" => cd(args)?,
@@ -66,6 +66,18 @@ fn my_which(cmd: &str) -> CommandType {
     } else {
         CommandType::Unknown
     }
+}
+
+pub fn pwd() -> Result<ShellOutput> {
+    let mut current_dir = env::current_dir()?.to_string_lossy().to_string();
+
+    // 移除 macOS 在 /tmp /var 前自动附加的 /private 前缀
+    if cfg!(target_os = "macos") && current_dir.starts_with("/private/") {
+        current_dir = current_dir.strip_prefix("/private").unwrap().to_string();
+    }
+
+    let output = ShellOutput::new().success(format!("{}\n", current_dir));
+    Ok(output)
 }
 
 pub fn cd(args: &[&str]) -> Result<ShellOutput> {

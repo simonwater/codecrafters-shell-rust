@@ -5,6 +5,7 @@ use codecrafters_shell::{
 use os_pipe::{PipeReader, PipeWriter, pipe};
 use rustyline::config::Configurer;
 use rustyline::{CompletionType, Editor, completion::FilenameCompleter, error::ReadlineError};
+use std::io::{self, IsTerminal, Write};
 use std::process::{Child, Command, Stdio};
 use which::which;
 
@@ -24,8 +25,15 @@ fn main() {
     rl.set_helper(Some(helper));
 
     loop {
+        std::io::stdout().flush().unwrap();
         check_jobs();
         // read
+        if !io::stdout().is_terminal() {
+            // 由tester启动时，是通过管道捕获输入输出的，而不是terminal
+            // rustyline检测到当前处于非terminal环境时会自动禁用 Prompt 提示符的打印
+            print!("$ ");
+            io::stdout().flush().unwrap();
+        }
         let input = match rl.readline("$ ") {
             Ok(line) => line,
             Err(ReadlineError::Interrupted) | Err(ReadlineError::Eof) => {
