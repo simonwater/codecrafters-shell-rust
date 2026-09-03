@@ -1,6 +1,6 @@
-use anyhow::{Context, Error, Result};
+use anyhow::{Error, Result};
 use codecrafters_shell::{
-    CompleterHelper, Environment, ShellCommand, ShellOutput, builtins, executables, jobs,
+    CompleterHelper, Environment, ShellCommand, ShellOutput, builtins, executables, jobs, tokenizer,
 };
 use os_pipe::{PipeReader, PipeWriter, pipe};
 use rustyline::config::Configurer;
@@ -15,20 +15,8 @@ use which::which;
 const HISTFILE_VAR_NAME: &'static str = "HISTFILE";
 
 fn main() {
-    let mut commands = executables::get_path_executables();
-    let builtins = vec!["echo".to_string(), "exit".to_string()];
-    commands.extend(builtins);
-    let helper = CompleterHelper {
-        file_completer: FilenameCompleter::new(),
-        commands,
-    };
-    let mut rl: Editor<CompleterHelper, rustyline::history::FileHistory> = Editor::new().unwrap();
-    rl.set_completion_type(CompletionType::List);
-    rl.set_bell_style(rustyline::config::BellStyle::Audible);
-    rl.set_helper(Some(helper));
-
-    init_history(rl.history_mut());
-    let mut ctx = Environment::new(rl);
+    let editor = build_editor();
+    let mut ctx = Environment::new(editor);
 
     'main_loop: loop {
         std::io::stdout().flush().unwrap();
@@ -47,7 +35,7 @@ fn main() {
                 break 'main_loop;
             }
             Err(err) => {
-                println!("Error: {:?}", err);
+                eprintln!("Error: {:?}", err);
                 break 'main_loop;
             }
         };
@@ -56,7 +44,7 @@ fn main() {
             .unwrap();
 
         // parse tokens
-        let tokens = match shell_words::split(&input).context("command line parse error.") {
+        let tokens = match tokenizer::scan(&input, &ctx) {
             Ok(tokens) => tokens,
             Err(e) => {
                 eprintln!("{:#}", e);
@@ -77,7 +65,6 @@ fn main() {
         let commands = tokens
             .split(|token| token == "|")
             .collect::<Vec<&[String]>>();
-        // mut prev_out: Option<Stdio> = None;
         let mut prev_reader: Option<PipeReader> = None;
         let mut children: Vec<Child> = Vec::with_capacity(commands.len());
         for (i, &cmd_tokens) in commands.iter().enumerate() {
@@ -91,7 +78,6 @@ fn main() {
             };
 
             // execute
-            let _is_first = i == 0;
             let is_last = i == commands.len() - 1;
             let (cur_reader, mut cur_writer) = if commands.len() > 0 && !is_last {
                 let (r, w) = pipe().unwrap();
@@ -128,6 +114,22 @@ fn main() {
         }
     }
     save_hisory(ctx.get_editor_mut().history());
+}
+
+fn build_editor() -> Editor<CompleterHelper, FileHistory> {
+    let mut commands = executables::get_path_executables();
+    let builtins = vec!["echo".to_string(), "exit".to_string()];
+    commands.extend(builtins);
+    let helper = CompleterHelper {
+        file_completer: FilenameCompleter::new(),
+        commands,
+    };
+    let mut rl: Editor<CompleterHelper, FileHistory> = Editor::new().unwrap();
+    rl.set_completion_type(CompletionType::List);
+    rl.set_bell_style(rustyline::config::BellStyle::Audible);
+    rl.set_helper(Some(helper));
+    init_history(rl.history_mut());
+    rl
 }
 
 fn check_jobs() {

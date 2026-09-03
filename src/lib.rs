@@ -5,6 +5,7 @@ pub mod environment;
 pub mod executables;
 pub mod jobs;
 pub mod redirect;
+pub mod tokenizer;
 
 pub use auto_complete::CompleterHelper;
 pub use builtins::COMPS_MANAGER;
