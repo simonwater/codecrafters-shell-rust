@@ -4,12 +4,17 @@ use codecrafters_shell::{
 };
 use os_pipe::{PipeReader, PipeWriter, pipe};
 use rustyline::config::Configurer;
+use rustyline::history::{FileHistory, History};
 use rustyline::{CompletionType, Editor, completion::FilenameCompleter, error::ReadlineError};
 use std::cell::RefCell;
+use std::env;
 use std::io::{self, IsTerminal, Write};
+use std::path::Path;
 use std::process::{Child, Command, Stdio};
 use std::rc::Rc;
 use which::which;
+
+const HISTFILE_VAR_NAME: &'static str = "HISTFILE";
 
 fn main() {
     let mut commands = executables::get_path_executables();
@@ -23,10 +28,12 @@ fn main() {
     rl.set_completion_type(CompletionType::List);
     rl.set_bell_style(rustyline::config::BellStyle::Audible);
     rl.set_helper(Some(helper));
+
+    init_history(rl.history_mut());
     let rl = Rc::new(RefCell::new(rl));
     let ctx = Environment::new(rl.clone());
 
-    loop {
+    'main_loop: loop {
         std::io::stdout().flush().unwrap();
         check_jobs();
         // read
@@ -40,11 +47,11 @@ fn main() {
             Ok(line) => line,
             Err(ReadlineError::Interrupted) | Err(ReadlineError::Eof) => {
                 println!("Aborted!");
-                break;
+                break 'main_loop;
             }
             Err(err) => {
                 println!("Error: {:?}", err);
-                break;
+                break 'main_loop;
             }
         };
         rl.borrow_mut().add_history_entry(input.as_str()).unwrap();
@@ -105,7 +112,7 @@ fn main() {
             match result {
                 Ok(output) => {
                     if output.exit {
-                        return;
+                        break 'main_loop;
                     }
                 }
                 Err(e) => {
@@ -121,6 +128,7 @@ fn main() {
             }
         }
     }
+    save_hisory(rl.borrow().history());
 }
 
 fn check_jobs() {
@@ -210,4 +218,23 @@ fn handle_main_error(output: &ShellOutput, shell_cmd: &ShellCommand) -> Result<(
         eprint!("{}", output.err);
     }
     Ok(())
+}
+
+fn init_history(history: &mut FileHistory) {
+    if let Some(his_path) = env::var_os(HISTFILE_VAR_NAME) {
+        let path = Path::new(&his_path);
+        if let Err(e) = history.load(path) {
+            eprintln!("init history error: {}", e);
+        };
+        return;
+    }
+}
+
+fn save_hisory(history: &FileHistory) {
+    if let Some(his_path) = env::var_os(HISTFILE_VAR_NAME) {
+        if let Err(e) = builtins::save_all_history(history, his_path) {
+            eprintln!("init history error: {}", e);
+        };
+        return;
+    }
 }

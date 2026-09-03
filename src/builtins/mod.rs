@@ -1,12 +1,13 @@
-pub mod complete;
+mod complete;
+mod history;
 
 use crate::command::{CommandType, ShellCommand, ShellOutput};
 use crate::environment::Environment;
 use crate::jobs::JOB_MANAGER;
 use anyhow::Result;
 pub use complete::{COMPS_MANAGER, complete};
+pub use history::{history, save_all_history};
 use os_pipe::{PipeReader, PipeWriter};
-use rustyline::history::History;
 use std::env;
 use std::io::Write;
 use which::which;
@@ -115,24 +116,4 @@ pub fn my_type(args: &[&str]) -> ShellOutput {
 pub fn jobs(_args: &[&str]) -> Result<ShellOutput> {
     let out = JOB_MANAGER.lock().unwrap().list_jobs(false)?;
     Ok(ShellOutput::new().success(out))
-}
-
-pub fn history(args: &[&str], environment: &Environment) -> Result<ShellOutput> {
-    let mut recs = String::with_capacity(128);
-    let editor = environment.get_editor_ref().borrow();
-    let history = editor.history();
-    let len = history.len();
-    let recent = args
-        .iter()
-        .next()
-        .map(|&s| str::parse::<usize>(s).unwrap_or(len))
-        .unwrap_or(len)
-        .min(len);
-    let skip_cnt = len - recent;
-    let iter = history.iter().skip(skip_cnt);
-    for (i, rec) in iter.enumerate() {
-        let line = format!("  {} {}\n", i + 1 + skip_cnt, rec);
-        recs.push_str(&line);
-    }
-    Ok(ShellOutput::new().success(recs))
 }

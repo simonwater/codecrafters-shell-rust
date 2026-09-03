@@ -18,7 +18,7 @@ STAGES=(
   "br6" "ny9" "xk3"                               # Pipeline (46-48)
   "af3" "at7" "si2" "jd6" "dk5" "ma9" "rq2" "bv8" "fy4" # Background Jobs (49-57)
   "bq4" "yf5" "ag6" "rh7" "vq0" "dm2"             # History (58-63)
-  "za2" "in3" "sx3" "zp4" "kz7" "qz2"             # History Persistence (64-69)
+  "za2" "in3" "sx3" "zp4" "kz7" "jv2"             # History Persistence (64-69)
   "ji0" "oa2" "kv5" "db8" "ge9" "br2" "my0"       # Parameter Expansion (70-76)
 )
 
