@@ -30,9 +30,11 @@ if [ "$2" == "--previous" ] || [ "$2" == "-p" ]; then
 fi
 
 if [ -z "$TARGET_SLUG" ]; then
-  echo "Usage: ./test.sh <stage_slug> [--previous|-p]"
-  echo "Example: ./test.sh xk3 --previous"
-  exit 1
+  # echo "Usage: ./test.sh <stage_slug> [--previous|-p]"
+  # echo "Example: ./test.sh xk3 --previous"
+  # exit 1
+  TARGET_SLUG="my0"
+  PREVIOUS=true
 fi
 
 # 寻找目标 slug 在数组中的位置
