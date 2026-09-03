@@ -3,8 +3,6 @@ use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
 
-use crate::ShellOutput;
-
 type OutRedirects = Vec<Redirection>;
 type ErrRedirects = Vec<Redirection>;
 
@@ -36,12 +34,12 @@ impl Redirection {
         Ok(file)
     }
 
-    pub fn handle_out(&self, output: &ShellOutput) -> Result<()> {
+    pub fn handle_out(&self, out: &str) -> Result<()> {
         match self.rtype {
             RedirectType::StdoutTruncate | RedirectType::StdoutAppend => {
                 let mut f = self.redirect_file()?; // 无论out是否存在都创建文件
-                if !output.out.is_empty() {
-                    f.write_all(output.out.as_bytes())?;
+                if !out.is_empty() {
+                    f.write_all(out.as_bytes())?;
                 }
             }
             _ => {}
@@ -49,12 +47,12 @@ impl Redirection {
         Ok(())
     }
 
-    pub fn handle_err(&self, output: &ShellOutput) -> Result<()> {
+    pub fn handle_err(&self, err: &str) -> Result<()> {
         match self.rtype {
             RedirectType::StderrTruncate | RedirectType::StderrAppend => {
                 let mut f = self.redirect_file()?; // 无论err是否存在都创建文件
-                if !output.err.is_empty() {
-                    f.write_all(output.err.as_bytes())?;
+                if !err.is_empty() {
+                    f.write_all(err.as_bytes())?;
                 }
             }
             _ => {}

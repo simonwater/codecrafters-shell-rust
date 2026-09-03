@@ -1,20 +1,27 @@
 mod complete;
+mod declare;
 mod history;
 
 use crate::command::{CommandType, ShellCommand, ShellOutput};
 use crate::environment::Environment;
 use crate::jobs::JOB_MANAGER;
 use anyhow::Result;
-pub use complete::{COMPS_MANAGER, complete};
-pub use history::{history, save_all_history};
+use complete::complete;
+use declare::declare;
+use history::history;
 use os_pipe::{PipeReader, PipeWriter};
 use std::env;
 use std::io::Write;
 use which::which;
 
+pub use complete::COMPS_MANAGER;
+pub use history::save_all_history;
+
 pub fn is_builtin(s: &str) -> bool {
     match s {
-        "echo" | "type" | "exit" | "pwd" | "cd" | "complete" | "jobs" | "history" => true,
+        "echo" | "type" | "exit" | "pwd" | "cd" | "complete" | "jobs" | "history" | "declare" => {
+            true
+        }
         _ => false,
     }
 }
@@ -23,7 +30,7 @@ pub fn run_builtin(
     _prev_reader: &mut Option<PipeReader>,
     cur_writer: &mut Option<PipeWriter>,
     shell_cmd: &ShellCommand,
-    environment: &Environment,
+    environment: &mut Environment,
 ) -> Result<ShellOutput> {
     let args = &shell_cmd.args;
     let output = match shell_cmd.name {
@@ -35,13 +42,14 @@ pub fn run_builtin(
         "cd" => cd(args)?,
         "jobs" => jobs(args)?,
         "history" => history(args, environment)?,
+        "declare" => declare(args, environment)?,
         _ => ShellOutput::new().success(format!("{}: command not found\n", shell_cmd.name)),
     };
 
     // 错误
     if !shell_cmd.err_redirects.is_empty() {
         for r in &shell_cmd.err_redirects {
-            r.handle_err(&output)?;
+            r.handle_err(&output.err)?;
         }
     } else if !output.err.is_empty() {
         eprint!("{}", output.err);
@@ -50,7 +58,7 @@ pub fn run_builtin(
     // 输出
     if !shell_cmd.out_redirects.is_empty() {
         for r in &shell_cmd.out_redirects {
-            r.handle_out(&output)?;
+            r.handle_out(&output.out)?;
         }
     } else if let Some(mut writer) = cur_writer.take() {
         write!(writer, "{}", output.out)?;

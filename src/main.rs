@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{Context, Error, Result};
 use codecrafters_shell::{
     CompleterHelper, Environment, ShellCommand, ShellOutput, builtins, executables, jobs,
 };
@@ -6,12 +6,10 @@ use os_pipe::{PipeReader, PipeWriter, pipe};
 use rustyline::config::Configurer;
 use rustyline::history::{FileHistory, History};
 use rustyline::{CompletionType, Editor, completion::FilenameCompleter, error::ReadlineError};
-use std::cell::RefCell;
 use std::env;
 use std::io::{self, IsTerminal, Write};
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
-use std::rc::Rc;
 use which::which;
 
 const HISTFILE_VAR_NAME: &'static str = "HISTFILE";
@@ -30,8 +28,7 @@ fn main() {
     rl.set_helper(Some(helper));
 
     init_history(rl.history_mut());
-    let rl = Rc::new(RefCell::new(rl));
-    let ctx = Environment::new(rl.clone());
+    let mut ctx = Environment::new(rl);
 
     'main_loop: loop {
         std::io::stdout().flush().unwrap();
@@ -43,7 +40,7 @@ fn main() {
             print!("$ ");
             io::stdout().flush().unwrap();
         }
-        let input = match rl.borrow_mut().readline("$ ") {
+        let input = match ctx.get_editor_mut().readline("$ ") {
             Ok(line) => line,
             Err(ReadlineError::Interrupted) | Err(ReadlineError::Eof) => {
                 println!("Aborted!");
@@ -54,7 +51,9 @@ fn main() {
                 break 'main_loop;
             }
         };
-        rl.borrow_mut().add_history_entry(input.as_str()).unwrap();
+        ctx.get_editor_mut()
+            .add_history_entry(input.as_str())
+            .unwrap();
 
         // parse tokens
         let tokens = match shell_words::split(&input).context("command line parse error.") {
@@ -102,7 +101,7 @@ fn main() {
             };
 
             let result = if builtins::is_builtin(cmd.name) {
-                builtins::run_builtin(&mut prev_reader, &mut cur_writer, &mut cmd, &ctx)
+                builtins::run_builtin(&mut prev_reader, &mut cur_writer, &mut cmd, &mut ctx)
             } else {
                 run_external(&mut prev_reader, &mut cur_writer, &cmd, &mut children)
             };
@@ -116,7 +115,7 @@ fn main() {
                     }
                 }
                 Err(e) => {
-                    eprint!("{:#}", e);
+                    handle_main_error(&e.to_string(), &cmd).unwrap_or_else(|e| eprint!("{}", e));
                     continue;
                 }
             }
@@ -128,7 +127,7 @@ fn main() {
             }
         }
     }
-    save_hisory(rl.borrow().history());
+    save_hisory(ctx.get_editor_mut().history());
 }
 
 fn check_jobs() {
@@ -181,15 +180,13 @@ fn run_external(
 
             let child = command.spawn()?;
             children.push(child);
+            return Ok(ShellOutput::null());
         }
         Err(_) => {
-            let output =
-                ShellOutput::new().error(format!("{}: command not found\n", shell_cmd.name));
-            handle_main_error(&output, shell_cmd)?;
+            let err_msg = format!("{}: command not found\n", shell_cmd.name);
+            return Err(Error::msg(err_msg));
         }
     }
-
-    Ok(ShellOutput::null())
 }
 
 fn run_job(cmd: &str, args: &[&str]) -> Result<()> {
@@ -207,15 +204,15 @@ fn run_job(cmd: &str, args: &[&str]) -> Result<()> {
     Ok(())
 }
 
-/// shell主进程的output
-fn handle_main_error(output: &ShellOutput, shell_cmd: &ShellCommand) -> Result<()> {
+/// shell主进程内建命令的错误处理
+fn handle_main_error(err_msg: &str, shell_cmd: &ShellCommand) -> Result<()> {
     // 错误
     if !shell_cmd.err_redirects.is_empty() {
         for r in &shell_cmd.err_redirects {
-            r.handle_err(&output)?;
+            r.handle_err(err_msg)?;
         }
-    } else if !output.err.is_empty() {
-        eprint!("{}", output.err);
+    } else if !err_msg.is_empty() {
+        eprint!("{}", err_msg);
     }
     Ok(())
 }

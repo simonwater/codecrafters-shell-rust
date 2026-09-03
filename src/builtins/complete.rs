@@ -30,7 +30,7 @@ impl CompleteRepo {
     }
 }
 
-pub fn complete(args: &[&str]) -> Result<ShellOutput> {
+pub(crate) fn complete(args: &[&str]) -> Result<ShellOutput> {
     let mut iter = args.iter();
     if let Some(&first) = iter.next() {
         match first {

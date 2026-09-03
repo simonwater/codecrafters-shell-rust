@@ -7,8 +7,8 @@ use rustyline::history::{FileHistory, History};
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, Read, Write};
 
-pub fn history(args: &[&str], environment: &Environment) -> Result<ShellOutput> {
-    let mut editor = environment.get_editor_ref().borrow_mut();
+pub(crate) fn history(args: &[&str], environment: &mut Environment) -> Result<ShellOutput> {
+    let editor = environment.get_editor_mut();
     let history = editor.history_mut();
     let mut iter = args.iter();
     if let Some(&arg1) = iter.next() {
@@ -61,7 +61,7 @@ fn get_recent_historys(history: &FileHistory, recent: usize) -> ShellOutput {
 }
 
 /// 检查并移除历史文件第一行的 :#V2 Header
-pub fn strip_v2_header_if_exists<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
+fn strip_v2_header_if_exists<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
     let path = path.as_ref();
     if !path.exists() {
         return Ok(());
